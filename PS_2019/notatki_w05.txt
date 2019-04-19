@@ -1,0 +1,53 @@
+Przykłady broadcast:
+Bootp - gdy chcemy przypisac sobie adres IP przy starcie, broadcastujemy, DHCP to wykorzystuje, tylko IPv4
+NTP (Network Time Protocol) - uzywany do synchronizacji urzadzen
+
+Broadcast ograniczony to 255.255.255.255 - zatrzymuje sie na routerach, bo one nie przenosza go dalej
+Broadcast skierowany - na adres broadcastowy kokretnej sieci, tez raczej wycinany przez routery (bo po co ktos z zewnątrz miałby tak robic naszej sieci?)
+
+rozgłaszanie w UDP: 
+musi byc ustawiona opcja SO_BROADCAST w sockecie
+
+Multicast:
+IPv4:
+Wykład05:
+Adresy 224.0.0.0/28 (od 224.0.0.0 do 239.255.255.255) (klasa D)
+IPv6:
+FF na początku
+bardziej rozwiniete
+
+Przyłaczenie sie do grupy multicastowej:
+socket DGRAM,
+ustawiamy opcję MCAST_JOIN_GROUP setsockoptem,
+bind + recvfrom - nasłuchujemy i odbieramy datagramy
+
+Wypisanie się:
+MCAST_LEAVE_GROUP
+lub zamknięcie gniazda - automatyczne wypisanie
+
+Wykład06:
+
+Stream Control Transmission Protocol
+
+Ile minimum gniazd dla protokołu SCTP jest wymaganych do komunikacji z X klientami dla:
+Trybu one-to-one:
+    X gniazd, kazde gniazdo komunikuje się z jednym
+Trybu one-to-many:
+    Jedno gniazdo moze obsługiwać wielu klientów
+Tryb 'TCP':
+    Dokładnie jedna asocjacja na gniezdzie
+Tryb 'UDP':
+    kilka asocjacji na jednym gniezdzie jednoczesnie
+
+asocjacja SCTP:
+Normalnie (przy UDP albo TCP) mamy syutację taką, ze struktura adresowej (potrzebnej do np stworzenia socketa) przypisujemy dokładnie jeden adres lub wpisujemy INADDR_ANY (wildcard address), co oznacza, ze bedziemy słuchac na wszystkich interfejsach, ale klient wybierze tylko jeden.
+SCTP pozwala wybrac podzbior interfejsow po dowolnej stronie asocjacji.
+Normalnie (UDP/TCP) bindujemy (bind()) socket do pojedynczego adresu (lub do wildcard addressu).
+W SCTP sctp_bindx(), ktore bierze tablice sockaddr i binduje do nich socket. Wszystkie sockaddr-y przypisane do socketu muszą miec ten sam numer portu.
+Mozna podac:
+- wylacznie IPv4 sockaddrs,
+- wylacznie IPv6 sockaddrs,
+- mix dwoch powyzszych (tu nie jest tak łatwo, bo sockaddr_in i sockaddr_in6 mają rózne rozmiary)
+
+Normalnie po stronie clienta nie trzeba bindowac, chyba ze chcemy samemu wybrac interfejs (normalnie stanie się to podczas connect() - wybrany zostanie jeden interfejs i port efemeryczny).
+W SCTP tez sie nie binduje - wszystko bedzie tak samo, tyle ze zamiast jednego interfejsu zostanie wybranych kilka (zazwyczaj wszystkie dostepne).

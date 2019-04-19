@@ -1,0 +1,3 @@
+#!/bin/bash
+echo "UPDATE plików do /home/piotr/Dokumenty/PS_2019"
+scp -r pkoziar@pluton.kt.agh.edu.pl:/home/gozdecki/PS_2019 /home/piotr/Dokumenty/PS_2019/

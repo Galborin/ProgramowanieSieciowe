@@ -1,0 +1,95 @@
+1. Jaka jest domyślna reakcja procesu na:
+    SIGCHILD - ignorowany bez procedury obsługi
+    SIGPIPE - zakończenie procesu 
+    SIGURG - ignorowany bez procedury obsługi
+2. Do czego służą flagi w socket() i accept():
+    SOCK_NONBLOCK - opcja ustawia flagę O_NONBLOCK na new file description powstałym po open() (open() tworzy 'open file description' w system wide table of open files (info o wszystkich otwartych file przez procesy), open file description odnosi się do powstałego file descriptora). O_NONBLOCK powoduje, że file jest otwarty w nonblocking mode - żadne I/O operacje na file descriptorze nie spowodują że proces wywołujący będzie musiał czekać
+    SOCK_CLOEXEX - ustawia flagę FD_CLOEXEC (close-on-exec) na powstałym descriptorze - powoduje ona zamknięcie file po jego wykonaniu.
+3. Do czego connect() dla UDP?
+    connect() wywołany na gniazdach UDP tworzy gniazda UDP połączone.
+Używa się wtedy send() lub write(). Znany jest adres docelowy do którego połączyliśmy się funkcją connect() - tylko z tego adresu przekazywane są do gniazda datagramy, które odczytuje się read() lub recv().
+4. Kiedy proces może odbierad błędy asynchroniczne ICMP na gnieździe UDP?
+    Tylko wtedy gdy są połączone.
+5. Do czego służy funkcja listen() dla protokołu UDP?
+    nie używa się listen() dla UDP
+6. Jakie funkcje sieciowe należy wywołać po stronie serwera, aby można było odebrać pakiet od klienta:
+a) dla TCP
+    socket(), bind(), listen(), accept(), read()
+b) dla UDP
+    socket(), bind(), recvfrom()
+7. Jakie funkcje sieciowe należy wywolać po stronie serwera, aby można było wysłać pakiet do klienta:
+a) dla TCP
+    socket(), bind(), listen(), accept(), write()
+b) dla UDP
+    socket(), bind(), recvfrom()(otrzymujemy port i IP klienta), sendto()     
+8. Jakie funkcje sieciowe należy wywołać po stronie klienta, aby można było odebrać pakiet od serwera:
+a) dla TCP
+    socket(), connect(), read()	
+b) dla UDP
+    socket(), sendto(), recvfrom() 	
+9. Jakie funkcje sieciowe należy wywolać po stronie klienta, aby można było wysłać pakiet do serwera:
+a) dla TCP
+    socket(), connect(), write()
+b) dla UDP
+    socket(), sendto()
+10. W jaki sposób w serwerze UDP (gniazdo niepołączone) i TCP można uzyskać informacje:
+a) o adresie źródłowym pakietu
+    UDP: recvfrom() TCP: accept(), getpeername()
+b) o porcie źródłowym pakietu
+    UDP: recvfrom() TCP: accept(), getpeername() 	
+c) o adresie docelowym pakietu
+    UDP: rcvmsg() TCP: getsockname()	
+d) o porcie docelowym pakietu
+    UDP: getsockname() TCP: getsockname()
+12. W jaki sposób w kliencie UDP (gniazdo niepołączone) i TCP można uzyskać powyższe informacje:
+a) o adresie źródłowym pakietu
+    UDP: rcvfrom() TCP: getpeername()
+b) o porcie źródłowym pakietu
+    UDP: rcvfrom() TCP: getpeername()
+c) o adresie docelowym pakietu
+    UDP: rcvmsg() TCP: getsockname()
+d) o porcie docelowym pakietu
+    UDP: getsockname() TCP: getsockname()
+13. Jakie kroki należy wykonać aby odebrać informację z nagłówka pakietu IP funkcją recvmsg()
+    1. ustawić opcje, które chcemy odbierać funkcją setsockopt()
+    2. wywołać funkcję recvmsg(), która oprócz danych datagramu przekazuje żądane informacje (jako argument podaje się wskaźnik na strukturę typu msghdr, dzięki niej przekazuje się dane i dodatkowe info)
+    3. Odczytać za pomocą makr żądaną opcję
+14. Jak powinny zostać ustawione adresy w funkcjach wysyłających dla protokołu UDP i TCP
+    Musimy podać wskaźnik na strukturę typu sockaddr zawierającą adres docelowy. 
+    UDP niepołączone: sendto() z określonym adresem docelowego
+    UDP połączone: write()/send() lub sendto() bez określonego adresu docelowego 
+    TCP: write()/send() lub sendto() bez określonego adresu docelowego
+15. Jak działa serwer współbieżny dla UDP
+        
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
