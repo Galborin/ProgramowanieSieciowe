@@ -6,16 +6,17 @@
 #include <sys/errno.h>
 #include <string.h>
 #include <unistd.h>
+#include <arpa/inet.h>
 
 
 int main(){
     int mysockfd, clisockfd;
     struct sockaddr_in myaddress, cliaddress;
+    char address[INET_ADDRSTRLEN+1];
     socklen_t cliaddresslength;
     myaddress.sin_family = AF_INET;
     myaddress.sin_port = htons(5454);
     myaddress.sin_addr.s_addr = INADDR_ANY;
-
 
     if((mysockfd = socket(AF_INET,SOCK_STREAM,0))<0){
         printf("socket() fail: %s \n", strerror(errno));
@@ -43,13 +44,17 @@ int main(){
             printf("accept() fail, %s \n", strerror(errno));
             return 1;
         }
+        else{
+            inet_ntop(AF_INET,(const struct sockaddr *)&cliaddress.sin_addr,address,sizeof(address));
+            printf("Connection from: %s\n",address);
+        }
 
         char * msg = "HELLO";
         if(send(clisockfd,(const void*)msg,strlen(msg),0)<0){
             printf("send() fail, %s \n", strerror(errno));
         }
         else{
-            printf("sended %d \n", (int)strlen(msg));
+            printf("sended %d \n", (int)strlen(msg)+1);
         }
         close(clisockfd);
     }
