@@ -31,9 +31,18 @@ int main(int argc, char**argv){
         return 1;
     }
 
+    char msg[100];
     while((n=recv(mysockfd,buffer,BUFFER_SIZE,0))>0){
         buffer[n]='\0';
         printf("%s\n",buffer);
+
+        scanf("%s",msg);
+        if(send(mysockfd,(const void*)msg,strlen(msg)+1,0)<0){
+            printf("send() fail, %s \n", strerror(errno));
+        }
+        else{
+            printf("sended %d \n", (int)strlen(msg)+1);
+        }
     }
     
 
