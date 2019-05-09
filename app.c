@@ -1,17 +1,7 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <sys/errno.h>
-#include <string.h>
-#include <unistd.h>
-#include <arpa/inet.h>
+#include "app.h"
 
-#define BUFFER_SIZE 1024
-
-static int send_echo(int destfd,const void * ptr,int n);
-static void my_echo(int destfd,void * ptr,size_t length);
+extern int send_echo(int destfd,const void * ptr,int n);
+extern void my_echo(int destfd,void * ptr,size_t length);
 
 int main(){
     int listenfd, connectfd;
@@ -69,41 +59,4 @@ int main(){
         close(connectfd);
     }
     return 0;
-}
-
-static int send_echo(int destfd,const void * ptr,int n){
-    int ntosend = n;
-    int sended = 0;
-    while(ntosend>0){
-        if((sended = send(destfd,ptr,ntosend,0))<=0){
-            if((sended < 0) && (errno == EINTR)){
-                sended = 0;
-            }
-            else
-            {
-                printf("send() fail, %s \n", strerror(errno));
-                return(-1);
-            }
-        }
-        printf("sended= %i \n", sended);
-        ntosend-=sended;
-    }
-    printf("ntosend after= %d \n", ntosend);
-    return ntosend;
-}
-
-static void my_echo(int destfd,void * ptr,size_t length){
-    int nreceived;
-    
-    again:
-    while((nreceived = recv(destfd,ptr,BUFFER_SIZE,0))>0){
-        printf("\nnreceived: %d\n",nreceived);
-        if(send_echo(destfd,ptr,nreceived)<0){
-                printf("send_echo() fail, %s \n", strerror(errno));
-                close(destfd);
-        }
-    }
-    if((nreceived<0) && (errno == EINTR)){//back to the loop
-        goto again;
-    }
 }
