@@ -3,7 +3,17 @@
 extern int send_echo(int destfd,const void * ptr,int n);
 extern void my_echo(int destfd,void * ptr,size_t length);
 
+
+void sig_child(int signo){
+    pid_t	pid;
+    int stat_loc;
+    while((pid = waitpid(-1,&stat_loc,WNOHANG))>0){
+        printf("Child %d terminated\n",pid);
+    }
+}
+
 int main(){
+    pid_t childprocesspid;
     int listenfd, connectfd;
     struct sockaddr_in myaddress, cliaddress;
     char address[INET_ADDRSTRLEN+1];
@@ -33,6 +43,8 @@ int main(){
         return 1;
     }
 
+    signal(SIGCHLD, sig_child);
+
     int n = 0;
     while(1){
         if((connectfd=accept(listenfd,(struct sockaddr*)&cliaddress,&cliaddresslength))<0){
@@ -53,9 +65,13 @@ int main(){
         }
 
         char buffer[BUFFER_SIZE];
-
-        my_echo(connectfd,buffer,BUFFER_SIZE);
-
+        
+        childprocesspid = fork(); /*create child process*/
+        if ( childprocesspid == 0) {	/* execute in child process */
+            close(listenfd);
+            my_echo(connectfd,buffer,BUFFER_SIZE);
+            exit(0);
+        }
         close(connectfd);
     }
     return 0;
