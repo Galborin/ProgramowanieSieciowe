@@ -23,17 +23,14 @@ int send_echo(int destfd,const void * ptr,int n){
 }
 
 void my_echo(int destfd,void * ptr,size_t length){
-    int nreceived;
-    
-    again:
-    while((nreceived = recv(destfd,ptr,BUFFER_SIZE,0))>0){
-        printf("\nnreceived: %d\n",nreceived);
-        if(send_echo(destfd,ptr,nreceived)<0){
+    int nreceived;   
+    do{
+        while((nreceived = recv(destfd,ptr,BUFFER_SIZE,0))>0){
+            printf("\nnreceived: %d\n",nreceived);
+            if(send_echo(destfd,ptr,nreceived)<0){
                 printf("send_echo() fail, %s \n", strerror(errno));
                 close(destfd);
+            }
         }
-    }
-    if((nreceived<0) && (errno == EINTR)){//back to the loop
-        goto again;
-    }
+    }while((nreceived<0) && (errno == EINTR));
 }

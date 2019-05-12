@@ -1,8 +1,9 @@
 #include "app.h"
 
-extern int send_echo(int destfd,const void * ptr,int n);
+extern int send_echo(int destfd,void * ptr,int n);
 extern void my_echo(int destfd,void * ptr,size_t length);
-
+extern struct sockaddr * client(int clifd, const void * ptr,size_t length);
+extern log_in(int clifd, const void * ptr,size_t length, user * usr);
 
 void sig_child(int signo){
     pid_t	pid;
@@ -55,7 +56,7 @@ int main(){
         return 1;
     }
 
-    if(listen(listenfd,2)<0){
+    if(listen(listenfd,LISTENQ)<0){
         printf("listen() fail, %s \n", strerror(errno));
         return 1;
     }
@@ -93,11 +94,15 @@ int main(){
 
         if(forkpid == 0){ /*execute in child process */
             close(listenfd);
-            my_echo(connectfd,buffer,BUFFER_SIZE);
-            close(connectfd);
+            user myuser;
+
+            /*log in */
+            log_in(connectfd, buffer, BUFFER_SIZE, &myuser);
+            //my_echo(connectfd,buffer,BUFFER_SIZE);
+            client(connectfd, buffer, BUFFER_SIZE);
             exit(0);
         }
-            
+
         close(connectfd); 
     }
     return 0;
