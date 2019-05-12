@@ -13,7 +13,8 @@ void sig_child(int signo){
 }
 
 int main(){
-    pid_t childprocesspid;
+    pid_t forkpid;
+    pid_t newsid;
     int listenfd, connectfd;
     struct sockaddr_in myaddress, cliaddress;
     char address[INET_ADDRSTRLEN+1];
@@ -21,6 +22,22 @@ int main(){
     myaddress.sin_family = AF_INET;
     myaddress.sin_port = htons(5454);
     myaddress.sin_addr.s_addr = INADDR_ANY;
+
+    forkpid = fork(); /*create child process*/
+    if(forkpid < 0){ /*error*/
+        printf("fork() fail, %s \n", strerror(errno));
+        exit(1); 
+    }
+    if(forkpid > 0){ /*kill parent*/
+        exit(0);
+    }
+    if ( forkpid == 0) {	/* execute in child process */
+        newsid = setsid();
+        if(newsid < 0){ /*error*/
+            printf("setsid() fail, %s \n", strerror(errno));
+            exit(1);
+        }
+    }    
 
     if((listenfd = socket(AF_INET,SOCK_STREAM,0))<0){
         printf("socket() fail: %s \n", strerror(errno));
@@ -47,6 +64,7 @@ int main(){
 
     int n = 0;
     while(1){
+        cliaddresslength = sizeof(cliaddress);
         if((connectfd=accept(listenfd,(struct sockaddr*)&cliaddress,&cliaddresslength))<0){
             printf("accept() fail, %s \n", strerror(errno));
             return 1;
@@ -66,13 +84,21 @@ int main(){
 
         char buffer[BUFFER_SIZE];
         
-        childprocesspid = fork(); /*create child process*/
-        if ( childprocesspid == 0) {	/* execute in child process */
+        forkpid = fork();
+
+        if(forkpid < 0){ /*error*/
+            printf("fork() fail, %s \n", strerror(errno));
+            exit(1); 
+        }
+
+        if(forkpid == 0){ /*execute in child process */
             close(listenfd);
             my_echo(connectfd,buffer,BUFFER_SIZE);
+            close(connectfd);
             exit(0);
         }
-        close(connectfd);
+            
+        close(connectfd); 
     }
     return 0;
 }
