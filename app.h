@@ -11,3 +11,9 @@
 #include <signal.h>
 
 #define BUFFER_SIZE 1024
+#define LISTENQ 10
+
+typedef struct user{
+    char * user_name;
+    struct sockaddr_in user_address;
+}user;
