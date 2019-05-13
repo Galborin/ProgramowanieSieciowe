@@ -25,11 +25,12 @@ int main(int argc, char**argv){
         printf("socket() error: %s\n", strerror(errno));
         return 1;
     }
-
+    printf("Connecting to server...\n");
     if(connect(mysockfd,(const struct sockaddr*)&srvaddress,sizeof(srvaddress))<0){
         printf("connect() error: %s\n", strerror(errno));
         return 1;
     }
+    printf("Sucess!\n");
 
     char msg[100];
     while((n=recv(mysockfd,buffer,BUFFER_SIZE,0))>0){
@@ -45,6 +46,6 @@ int main(int argc, char**argv){
         }
     }
     
-
+    printf("\nCLOSING :\n\n");
     return 0;
 }

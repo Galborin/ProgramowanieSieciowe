@@ -1,9 +1,11 @@
 #include "app.h"
 
-extern int send_echo(int destfd,void * ptr,int n);
-extern void my_echo(int destfd,void * ptr,size_t length);
-extern struct sockaddr * client(int clifd, const void * ptr,size_t length);
-extern log_in(int clifd, const void * ptr,size_t length, user * usr);
+extern int send_echo(int destfd, void * ptr, int n);
+extern void my_echo(int destfd, void * ptr, size_t length);
+extern struct sockaddr * client(int clifd, const void * ptr, size_t length);
+extern user * log_in(int clifd, struct sockaddr_in * usraddr);
+extern void display_user_list();
+extern int delete_user(const char * del_user_name);
 
 void sig_child(int signo){
     pid_t	pid;
@@ -11,6 +13,11 @@ void sig_child(int signo){
     while((pid = waitpid(-1,&stat_loc,WNOHANG))>0){
         printf("Child %d terminated\n",pid);
     }
+}
+
+void sig_pipe(int signo){
+	printf("Server received SIGPIPE - Default action is exit \n");
+	//exit(1);
 }
 
 int main(){
@@ -62,6 +69,7 @@ int main(){
     }
 
     signal(SIGCHLD, sig_child);
+    signal(SIGCHLD, sig_pipe);
 
     int n = 0;
     while(1){
@@ -76,12 +84,12 @@ int main(){
         }
 
         char * msg = "HELLO";
-        if(send(connectfd,(const void*)msg,strlen(msg)+1,0)<0){
+        /*if(send(connectfd,(const void*)msg,strlen(msg)+1,0)<0){
             printf("send() fail, %s \n", strerror(errno));
         }
         else{
             printf("sended Hello Message %d \n", (int)strlen(msg)+1);
-        }
+        }*/
 
         char buffer[BUFFER_SIZE];
         
@@ -94,15 +102,21 @@ int main(){
 
         if(forkpid == 0){ /*execute in child process */
             close(listenfd);
-            user myuser;
 
             /*log in */
-            log_in(connectfd, buffer, BUFFER_SIZE, &myuser);
-            //my_echo(connectfd,buffer,BUFFER_SIZE);
-            client(connectfd, buffer, BUFFER_SIZE);
+            user * myuser = log_in(connectfd, &cliaddress);
+            msg = "\nLOGGED IN\n\n";
+            if(send(connectfd,(const void*)msg,strlen(msg)+1,0)<0){
+                printf("send() fail, %s \n", strerror(errno));
+            }
+            printf("\nLOGGED IN :\n\n");
+            //display_user_list();
+            my_echo(connectfd,buffer,BUFFER_SIZE);
+            //client(connectfd, buffer, BUFFER_SIZE);
+            printf("\nDELETED %i:\n\n", delete_user(myuser->user_name));
+            sleep(3);
             exit(0);
         }
-
         close(connectfd); 
     }
     return 0;

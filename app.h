@@ -12,8 +12,9 @@
 
 #define BUFFER_SIZE 1024
 #define LISTENQ 10
+#define USER_NAME_LENGTH 20
 
 typedef struct user{
-    char * user_name;
+    char user_name[USER_NAME_LENGTH];
     struct sockaddr_in user_address;
 }user;
