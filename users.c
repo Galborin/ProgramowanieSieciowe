@@ -84,10 +84,10 @@ Display list of users.
 */
 void display_user_list(){
     if(head != NULL){
-        char * address;
+        char address[INET_ADDRSTRLEN+1];
         userElement * tmp = head;
         while(tmp!=NULL){
-            printf("\n%s  :  %s\n", tmp->m_user.user_name, \
+            printf("\n%s  :  %s\n", tmp->m_user.user_name,
             inet_ntop(AF_INET,(const struct sockaddr *)&tmp->m_user.user_address.sin_addr,address,INET_ADDRSTRLEN+1));
             tmp = tmp->next;
         }

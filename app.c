@@ -69,7 +69,7 @@ int main(){
     }
 
     signal(SIGCHLD, sig_child);
-    signal(SIGCHLD, sig_pipe);
+    signal(SIGPIPE, sig_pipe);
 
     int n = 0;
     while(1){
@@ -110,11 +110,11 @@ int main(){
                 printf("send() fail, %s \n", strerror(errno));
             }
             printf("\nLOGGED IN :\n\n");
-            //display_user_list();
+            display_user_list();
             my_echo(connectfd,buffer,BUFFER_SIZE);
-            //client(connectfd, buffer, BUFFER_SIZE);
+            client(connectfd, buffer, BUFFER_SIZE);
             printf("\nDELETED %i:\n\n", delete_user(myuser->user_name));
-            sleep(3);
+            sleep(1);
             exit(0);
         }
         close(connectfd); 
