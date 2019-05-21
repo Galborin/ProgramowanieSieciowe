@@ -9,12 +9,15 @@
 #include <arpa/inet.h>
 #include <sys/wait.h>
 #include <signal.h>
+#include <pthread.h>
 
 #define BUFFER_SIZE 1024
 #define LISTENQ 10
 #define USER_NAME_LENGTH 20
+#define NUM_THREADS 3
 
 typedef struct user{
     char user_name[USER_NAME_LENGTH];
     struct sockaddr_in user_address;
+    int fildesc;
 }user;

@@ -33,4 +33,9 @@ void my_echo(int destfd,void * ptr,size_t length){
             }
         }
     }while((nreceived<0) && (errno == EINTR));
+
+    if(nreceived<0){
+        printf("recv() fail, %s \n", strerror(errno));
+        exit(-1);
+    }
 }

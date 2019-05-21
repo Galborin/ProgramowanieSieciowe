@@ -2,23 +2,8 @@
 
 extern int send_echo(int destfd, void * ptr, int n);
 extern void my_echo(int destfd, void * ptr, size_t length);
-extern struct sockaddr * client(int clifd, const void * ptr, size_t length);
-extern user * log_in(int clifd, struct sockaddr_in * usraddr);
-extern void display_user_list();
+void client(user * connected_usr);
 extern int delete_user(const char * del_user_name);
-
-void sig_child(int signo){
-    pid_t	pid;
-    int stat_loc;
-    while((pid = waitpid(-1,&stat_loc,WNOHANG))>0){
-        printf("Child %d terminated\n",pid);
-    }
-}
-
-void sig_pipe(int signo){
-	printf("Server received SIGPIPE - Default action is exit \n");
-	//exit(1);
-}
 
 int main(){
     pid_t forkpid;
@@ -39,7 +24,7 @@ int main(){
     if(forkpid > 0){ /*kill parent*/
         exit(0);
     }
-    if ( forkpid == 0) {	/* execute in child process */
+    if ( forkpid == 0) {  /* execute in child process */
         newsid = setsid();
         if(newsid < 0){ /*error*/
             printf("setsid() fail, %s \n", strerror(errno));
@@ -68,56 +53,24 @@ int main(){
         return 1;
     }
 
-    signal(SIGCHLD, sig_child);
-    signal(SIGPIPE, sig_pipe);
-
     int n = 0;
-    while(1){
+    while(1){ /*main loop*/
         cliaddresslength = sizeof(cliaddress);
         if((connectfd=accept(listenfd,(struct sockaddr*)&cliaddress,&cliaddresslength))<0){
             printf("accept() fail, %s \n", strerror(errno));
             return 1;
         }
-        else{
-            inet_ntop(AF_INET,(const struct sockaddr *)&cliaddress.sin_addr,address,sizeof(address));
-            printf("Connection from: %s\n",address);
-        }
-
-        char * msg = "HELLO";
-        /*if(send(connectfd,(const void*)msg,strlen(msg)+1,0)<0){
-            printf("send() fail, %s \n", strerror(errno));
-        }
-        else{
-            printf("sended Hello Message %d \n", (int)strlen(msg)+1);
-        }*/
-
-        char buffer[BUFFER_SIZE];
+        inet_ntop(AF_INET,(const struct sockaddr *)&cliaddress.sin_addr,address,sizeof(address));
+        printf("\nConnection from: %s\n",address);
+            
+        user * conn_user = calloc(1, sizeof(user)); /*allocate memory for new user */
+        conn_user->user_address = cliaddress;
+        conn_user->fildesc = connectfd;
         
-        forkpid = fork();
+        pthread_t thread; /*new thread*/
 
-        if(forkpid < 0){ /*error*/
-            printf("fork() fail, %s \n", strerror(errno));
-            exit(1); 
-        }
-
-        if(forkpid == 0){ /*execute in child process */
-            close(listenfd);
-
-            /*log in */
-            user * myuser = log_in(connectfd, &cliaddress);
-            msg = "\nLOGGED IN\n\n";
-            if(send(connectfd,(const void*)msg,strlen(msg)+1,0)<0){
-                printf("send() fail, %s \n", strerror(errno));
-            }
-            printf("\nLOGGED IN :\n\n");
-            display_user_list();
-            my_echo(connectfd,buffer,BUFFER_SIZE);
-            client(connectfd, buffer, BUFFER_SIZE);
-            printf("\nDELETED %i:\n\n", delete_user(myuser->user_name));
-            sleep(1);
-            exit(0);
-        }
-        close(connectfd); 
+        pthread_create(&thread, NULL, (void *(*)(void *))client, (void *)conn_user); /*create thread*/
+        pthread_detach(thread);
     }
     return 0;
 }
