@@ -1,21 +1,17 @@
+/*
+piotr
+22.05.2019
+*/
+
+/*includes------------------------------------------------------*/
 #include "app.h"
 
-//#define BUFFER_SIZE 1024
+/*private functions prototypes----------------------------------*/
 
-static void * recv_from_server(int * connfd){
-    static char buffer[BUFFER_SIZE];
-    int n;
+static char * get_input(char * buffer, int size);
+static void * recv_from_server(int * connfd);
 
-    while(1){
-        if((n=recv(*connfd,buffer,BUFFER_SIZE,0))<0){
-            printf("recv() fail, %s \n", strerror(errno));
-            return NULL;
-        }
-        buffer[n]='\0';
-        printf("%s\n",buffer);
-    }
-    return NULL;
-}
+/*main----------------------------------------------------------*/
 
 int main(int argc, char**argv){
     int mysockfd;
@@ -43,9 +39,12 @@ int main(int argc, char**argv){
 
     static char msg[BUFFER_SIZE];
     while(1){
-        scanf("%s",msg);
+        if(!get_input(msg,BUFFER_SIZE)){
+            printf("get_input() fail\n");
+            break;
+        }
         if(send(mysockfd,(const void*)msg,BUFFER_SIZE,0)<0){
-            printf("send() fail, %s \n", strerror(errno));
+            printf("send() fail\n");
             break;
         }
         else{
@@ -57,3 +56,38 @@ int main(int argc, char**argv){
     printf("\nCLOSING :\n");
     return 0;
 }
+
+/*
+Receive messages from server and print on stdout.
+Return NULL if error.
+*/
+static void * recv_from_server(int * connfd){
+    static char buffer[BUFFER_SIZE];
+    int n;
+
+    while(1){
+        if((n=recv(*connfd,buffer,BUFFER_SIZE,0))<0){
+            printf("recv() fail, %s \n", strerror(errno));
+            return NULL;
+        }
+        buffer[n]='\0';
+        printf("%s\n",buffer);
+    }
+    return NULL;
+}
+
+/*
+get message from stdin. 
+Returns input if newline. 
+If error return NULL.
+*/
+static char * get_input(char * buffer, int size){
+    char * input;
+
+    if(!(input = fgets(buffer,size,stdin)) && ferror(stdin)){
+        printf("fgets error\n");
+        return NULL;
+    }
+    buffer[strlen(buffer)-1] = '\0';
+    return input;
+} 

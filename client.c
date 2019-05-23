@@ -33,7 +33,7 @@ void * client(user * connected_usr){
     display_user_list(&UserList);
     do{
         while((nreceived = recv(*connected_usr->fildesc,buffer,BUFFER_SIZE,0))>0){
-            printf("\n%s(%lu): %s\n",connected_usr->user_name,strlen(buffer),buffer);
+            printf("%s(%lu): %s\n",connected_usr->user_name,strlen(buffer),buffer);
             command_proc(connected_usr->fildesc,buffer,NULL);
             //if(send_user_list(&UserList,connected_usr->fildesc)<0){
             //    printf("send_user_list() fail, %s \n", strerror(errno));
