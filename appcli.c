@@ -1,34 +1,20 @@
-/*#include <stdio.h>
-#include <stdlib.h>
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <sys/errno.h>
-#include <string.h>
-#include <arpa/inet.h>
-#include<unistd.h>
-#include <pthread.h>*/
 #include "app.h"
 
-#define BUFFER_SIZE 1024
+//#define BUFFER_SIZE 1024
 
-static int * recv_from_server(int * connfd){
-    char buffer[BUFFER_SIZE];
+static void * recv_from_server(int * connfd){
+    static char buffer[BUFFER_SIZE];
     int n;
-    int * result = (int *)malloc(sizeof(int));
-    
+
     while(1){
         if((n=recv(*connfd,buffer,BUFFER_SIZE,0))<0){
             printf("recv() fail, %s \n", strerror(errno));
-            *result = -1;
-            return result;
+            return NULL;
         }
         buffer[n]='\0';
         printf("%s\n",buffer);
     }
-    
-    *result = 0;
-    return result;
+    return NULL;
 }
 
 int main(int argc, char**argv){
@@ -53,21 +39,21 @@ int main(int argc, char**argv){
     printf("Success!\n");
     
     pthread_create(&recv_thread,NULL, (void*(*)(void *))recv_from_server, (void *)&mysockfd);
-    //int * recv_from_server_result;
-    //pthread_join(recv_thread, (void **)&recv_from_server_result);
     pthread_detach(recv_thread);
-    //printf("Result : %i", *recv_from_server_result);
-    char msg[100];
+
+    static char msg[BUFFER_SIZE];
     while(1){
         scanf("%s",msg);
-        if(send(mysockfd,(const void*)msg,strlen(msg)+1,0)<0){
+        if(send(mysockfd,(const void*)msg,BUFFER_SIZE,0)<0){
             printf("send() fail, %s \n", strerror(errno));
+            break;
         }
         else{
             //printf("sended %d \n", (int)strlen(msg)+1);
         }
     }
     
-    printf("\nCLOSING :\n\n");
+    close(mysockfd);
+    printf("\nCLOSING :\n");
     return 0;
 }

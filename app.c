@@ -1,14 +1,29 @@
+/*
+piotr
+22.05.2019
+*/
+
+/*includes------------------------------------------------------*/
 #include "app.h"
+#include "userlist.h"
 
-extern int send_echo(int destfd, void * ptr, int n);
-extern void my_echo(int destfd, void * ptr, size_t length);
-void client(user * connected_usr);
-extern int delete_user(const char * del_user_name);
+/*imported------------------------------------------------------*/
+extern void client(user * connected_usr);
 
+/*exported------------------------------------------------------*/
+userList_t UserList;
+
+/*global--------------------------------------------------------*/
+pthread_mutex_t client_mutex;
+
+/*private functions prototypes----------------------------------*/
+static void sig_pipe(int signo);
+
+/*main----------------------------------------------------------*/
 int main(){
     pid_t forkpid;
     pid_t newsid;
-    int listenfd, connectfd;
+    int listenfd;
     struct sockaddr_in myaddress, cliaddress;
     char address[INET_ADDRSTRLEN+1];
     socklen_t cliaddresslength;
@@ -53,16 +68,24 @@ int main(){
         return 1;
     }
 
+    /*initialize UserList*/
+    if(userList_init(&UserList,&client_mutex)<0){
+        printf("UserList initialization fail\n");
+        return 1;
+    }
+
+    signal(SIGPIPE, sig_pipe);
+
     int n = 0;
     while(1){ /*main loop*/
         cliaddresslength = sizeof(cliaddress);
-        if((connectfd=accept(listenfd,(struct sockaddr*)&cliaddress,&cliaddresslength))<0){
+        int * connectfd = (int*)malloc(sizeof(int));
+        if((*connectfd=accept(listenfd,(struct sockaddr*)&cliaddress,&cliaddresslength))<0){
             printf("accept() fail, %s \n", strerror(errno));
-            return 1;
         }
         inet_ntop(AF_INET,(const struct sockaddr *)&cliaddress.sin_addr,address,sizeof(address));
         printf("\nConnection from: %s\n",address);
-            
+
         user * conn_user = calloc(1, sizeof(user)); /*allocate memory for new user */
         conn_user->user_address = cliaddress;
         conn_user->fildesc = connectfd;
@@ -73,4 +96,9 @@ int main(){
         pthread_detach(thread);
     }
     return 0;
+}
+
+static void sig_pipe(int signo){
+    printf("Received sigpipe, exit\n");
+    exit(1);
 }
