@@ -34,6 +34,7 @@ int store_element(userList_t * list, listElem_t * element){
             list->head->next = NULL;
             list->head->prev = NULL;
         }
+        list->counter++;
         pthread_mutex_unlock(list->list_mutex);
         return 0;
     }
@@ -68,7 +69,6 @@ int send_user_list(userList_t * list, int * filedesc){
         size_t length = (USER_NAME_LENGTH+INET_ADDRSTRLEN+21)*list->counter+1;
         char all_address_name[length];
         bzero(all_address_name,length);
-        
         pthread_mutex_lock(list->list_mutex);
         listElem_t * tmp = list->head;
         while(tmp!=NULL){
@@ -89,7 +89,11 @@ int send_user_list(userList_t * list, int * filedesc){
         return list->counter;        
     }
     else{
-        printf("List is empty\n");
+        char * msg = "List is empty\n";
+         if(send(*filedesc,msg,strlen(msg)+1,0)<0){
+            printf("send() fail, %s \n", strerror(errno));
+            return -1;
+        }
         return 0;
     }
 }
@@ -116,8 +120,8 @@ int display_user_list(userList_t * list){
 
             tmp = tmp->next;
         }
+        list->counter--;
         pthread_mutex_unlock(list->list_mutex);
-
         printf("\n%s\n",all_address_name);
         return list->counter;        
     }

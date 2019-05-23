@@ -8,6 +8,27 @@
 /*includes------------------------------------------------------*/
 #include "app.h"
 
+/*user structure*/
+typedef struct user{
+    char user_name[USER_NAME_LENGTH];
+    struct sockaddr_in user_address;
+    int * fildesc;
+}user;
+
+/*list element structure*/
+typedef struct listElem_t{
+    user * m_user;
+    struct listElem_t * next;
+    struct listElem_t * prev;
+}listElem_t;
+
+/*list structure*/
+typedef struct userList{
+    listElem_t * head;
+    pthread_mutex_t * list_mutex;
+    int counter;
+}userList_t;
+
 /*function declarations------------------------------------------*/
 
 /*

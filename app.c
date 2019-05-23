@@ -6,6 +6,7 @@ piotr
 /*includes------------------------------------------------------*/
 #include "app.h"
 #include "userlist.h"
+#include "command_interface.h"
 
 /*imported------------------------------------------------------*/
 extern void client(user * connected_usr);
@@ -14,7 +15,7 @@ extern void client(user * connected_usr);
 userList_t UserList;
 
 /*global--------------------------------------------------------*/
-pthread_mutex_t client_mutex;
+pthread_mutex_t client_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 /*private functions prototypes----------------------------------*/
 static void sig_pipe(int signo);
@@ -31,21 +32,21 @@ int main(){
     myaddress.sin_port = htons(5454);
     myaddress.sin_addr.s_addr = INADDR_ANY;
 
-    forkpid = fork(); /*create child process*/
-    if(forkpid < 0){ /*error*/
-        printf("fork() fail, %s \n", strerror(errno));
-        exit(1); 
-    }
-    if(forkpid > 0){ /*kill parent*/
-        exit(0);
-    }
-    if ( forkpid == 0) {  /* execute in child process */
-        newsid = setsid();
-        if(newsid < 0){ /*error*/
-            printf("setsid() fail, %s \n", strerror(errno));
-            exit(1);
-        }
-    }    
+    //forkpid = fork(); /*create child process*/
+    //if(forkpid < 0){ /*error*/
+    //    printf("fork() fail, %s \n", strerror(errno));
+    //    exit(1); 
+    //}
+    //if(forkpid > 0){ /*kill parent*/
+    //    exit(0);
+   // }
+   // if ( forkpid == 0) {  /* execute in child process */
+    //    newsid = setsid();
+     //   if(newsid < 0){ /*error*/
+     //       printf("setsid() fail, %s \n", strerror(errno));
+      //      exit(1);
+       // }
+    //}    
 
     if((listenfd = socket(AF_INET,SOCK_STREAM,0))<0){
         printf("socket() fail: %s \n", strerror(errno));
@@ -74,6 +75,21 @@ int main(){
         return 1;
     }
 
+    /*vvvvvvvvvvv here commands are being stored vvvvvvvvvvvv*/
+
+    command listofcommands_task = {
+        command_name: "?",
+        func: (int(*)(void *))send_command_list 
+    };
+
+    if(store_command(&listofcommands_task)<0){
+        printf("store_command() fail\n");
+    }
+
+    display_command_list();
+
+    /*^^^^^^^^^^ here commands are being stored ^^^^^^^^^^^^*/
+
     signal(SIGPIPE, sig_pipe);
 
     int n = 0;
@@ -95,6 +111,8 @@ int main(){
         pthread_create(&thread, NULL, (void *(*)(void *))client, (void *)conn_user); /*create thread*/
         pthread_detach(thread);
     }
+
+    delete_command_list();
     return 0;
 }
 
