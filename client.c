@@ -16,7 +16,7 @@ static int log_in(userList_t * list, user * usr);
 
 /*public functions prototypes-----------------------------------*/
 void * client(user * connected_usr);
-static int command_proc(int * filedesc, const char * commandname, void * args);
+static int command_proc(int * filedesc, const char * input);
 
 /*function definitions------------------------------------------*/
 
@@ -34,7 +34,7 @@ void * client(user * connected_usr){
     do{
         while((nreceived = recv(*connected_usr->fildesc,buffer,BUFFER_SIZE,0))>0){
             printf("%s(%lu): %s\n",connected_usr->user_name,strlen(buffer),buffer);
-            command_proc(connected_usr->fildesc,buffer,NULL);
+            command_proc(connected_usr->fildesc,buffer);
             //if(send_user_list(&UserList,connected_usr->fildesc)<0){
             //    printf("send_user_list() fail, %s \n", strerror(errno));
             //  return NULL;
@@ -97,16 +97,20 @@ If so, call its function.
 Return 0 if success.
 If there is no such command, return -1.
 */
-static int command_proc(int * filedesc, const char * commandname, void * args){
-    if(!filedesc || !commandname)
+static int command_proc(int * filedesc, const char * input){
+    if(!filedesc || !input)
         return -1;
     
+    char * space = strchr(input,' ');/*find space in input*/
+    if(space)
+        *space = '\0'; /*separate command name from args*/
+
     command * found;
-    if(!(found = find_command_by_name(commandname))){
+    if(!(found = find_command_by_name(input))){
         return -1; /*there is no such command*/
     }
     else{
-        found->func((int *)filedesc);
+        found->func(filedesc,space);
         return 0;
     }
 }

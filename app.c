@@ -79,7 +79,7 @@ int main(){
 
     command listofcommands_task = {
         command_name: "?",
-        func: (int(*)(void *))send_command_list 
+        func: (int(*)(int * ,void *))send_command_list 
     };
 
     if(store_command(&listofcommands_task)<0){

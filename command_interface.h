@@ -11,7 +11,7 @@
 /*command structure*/
 typedef struct command{
     char command_name[MAX_CMD_LENGTH];
-    int (*func)(void * args);
+    int (*func)(int * filedesc, void * args);
 }command;
 
 /*command list element*/
