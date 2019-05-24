@@ -110,7 +110,7 @@ static int command_proc(int * filedesc, const char * input){
         return -1; /*there is no such command*/
     }
     else{
-        found->func(filedesc,space);
+        found->func(filedesc,space+1);
         return 0;
     }
 }
