@@ -17,30 +17,6 @@ int userList_init(userList_t * list, pthread_mutex_t * mutex){
     return 0;
 }
 
-/*int store_element(userList_t * list, user * usr){
-    pthread_mutex_lock(list->list_mutex);
-    if((!usr) || (!list))
-        return -1;
-    
-    if(list->head){
-        listElem_t * tmp = list->head;
-        while(tmp->next){
-            tmp = tmp->next;
-        }
-        tmp->next = (listElem_t *)malloc(sizeof(listElem_t));
-        tmp->next->next = NULL;
-        tmp->next->m_user = usr;
-    }
-    else{
-        list->head = (listElem_t *)malloc(sizeof(listElem_t));
-        list->head->m_user = usr;
-        list->head->next = NULL;    
-    }
-    list->counter++;
-    pthread_mutex_unlock(list->list_mutex);
-    return 0;
-}*/
-
 int store_element(userList_t * list, user * usr){
     if((!usr) || (!list))
         return -1;

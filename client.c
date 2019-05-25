@@ -68,26 +68,32 @@ Return -1 if error.
 */
 int log_in(userList_t * list, user * usr){
     char namebuff[BUFFER_SIZE];
-    if((usr==NULL)||(namebuff==NULL)||(list==NULL))
+    if((!usr) || (!namebuff) || (!list))
         return -1;
-
+    listElem_t * result = NULL;
     char * msg = "Log in\nGive your name\n";
-    if(send(*usr->fildesc,(const void*)msg,strlen(msg)+1,0)<0){
-        printf("send() fail, %s \n", strerror(errno));
-        return -1;
-    }
-
-    int nreceived;
     do{
-        nreceived = recv(*usr->fildesc,namebuff,BUFFER_SIZE,0);
-        printf("Name given : %s\n", namebuff);
-    }while((nreceived<0) && (errno == EINTR));
+        if(result)
+            msg = "Name is taken\nGive your name\n";
 
-    if(nreceived<0){
-        printf("recv() fail, %s \n", strerror(errno));
-        return -1;
-    }
+        if(send(*usr->fildesc,(const void*)msg,strlen(msg)+1,0)<0){
+            printf("send() fail, %s \n", strerror(errno));
+            return -1;
+        }
 
+        int nreceived;
+        do{
+            nreceived = recv(*usr->fildesc,namebuff,BUFFER_SIZE,0);
+            printf("Name given : %s\n", namebuff);
+        }while((nreceived<0) && (errno == EINTR));
+
+        if(nreceived<0){
+            printf("recv() fail, %s \n", strerror(errno));
+            return -1;
+        }
+
+    }while(result = find_user_by_name(UserList,namebuff)); /*check if name is not taken by someone*/
+    
     strcpy(usr->user_name,namebuff);
     pthread_mutex_lock(list->list_mutex);
     if(store_element(list, usr) < 0){

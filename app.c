@@ -13,7 +13,7 @@ extern void client(user * connected_usr);
 
 /*exported------------------------------------------------------*/
 userList_t * UserList;
-
+    
 /*global--------------------------------------------------------*/
 pthread_mutex_t client_mutex = PTHREAD_MUTEX_INITIALIZER;
 
