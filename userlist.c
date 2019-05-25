@@ -8,7 +8,7 @@
 /*function definitions------------------------------------------*/
 
 int userList_init(userList_t * list, pthread_mutex_t * mutex){
-    if((list==NULL) || (mutex == NULL))
+    if((!list) || (!mutex))
         return -1;
     
     list->head = NULL;
@@ -17,61 +17,80 @@ int userList_init(userList_t * list, pthread_mutex_t * mutex){
     return 0;
 }
 
-int store_element(userList_t * list, listElem_t * element){
-    if(element!=NULL){
-        pthread_mutex_lock(list->list_mutex);
-        if(list->head != NULL){
-            listElem_t * tmp = list->head;
-            while((tmp->next)!=NULL){
-                tmp = tmp->next;
-            }
-            tmp->next = element;
-            element->next = NULL;
-            element->prev = tmp;
+/*int store_element(userList_t * list, user * usr){
+    pthread_mutex_lock(list->list_mutex);
+    if((!usr) || (!list))
+        return -1;
+    
+    if(list->head){
+        listElem_t * tmp = list->head;
+        while(tmp->next){
+            tmp = tmp->next;
         }
-        else{
-            list->head = element;
-            list->head->next = NULL;
-            list->head->prev = NULL;
-        }
-        list->counter++;
-        pthread_mutex_unlock(list->list_mutex);
-        return 0;
+        tmp->next = (listElem_t *)malloc(sizeof(listElem_t));
+        tmp->next->next = NULL;
+        tmp->next->m_user = usr;
     }
-    return -1;
+    else{
+        list->head = (listElem_t *)malloc(sizeof(listElem_t));
+        list->head->m_user = usr;
+        list->head->next = NULL;    
+    }
+    list->counter++;
+    pthread_mutex_unlock(list->list_mutex);
+    return 0;
+}*/
+
+int store_element(userList_t * list, user * usr){
+    if((!usr) || (!list))
+        return -1;
+    
+    if(list->head){
+        list->head->prev = (listElem_t *)malloc(sizeof(listElem_t));
+        list->head->prev->prev = NULL;
+        list->head->prev->next = list->head;
+        list->head->prev->m_user = usr;
+        list->head = list->head->prev;  
+    }
+    else{
+        list->head = (listElem_t *)malloc(sizeof(listElem_t));
+        list->head->prev = NULL;
+        list->head->next = NULL;
+        list->head->m_user = usr;
+    }
+    list->counter++;    
+    return 0;
 }
 
-user * find_user_by_name(userList_t * list, const char * username){
-    if((list->head == NULL)||(username == NULL)||(list==NULL))
+listElem_t * find_user_by_name(userList_t * list, const char * username){
+    if((!list->head) || (!username) || (!list))
         return NULL;    
 
-    pthread_mutex_lock(list->list_mutex);
     listElem_t * tmp = list->head;
 
     while(strcmp(tmp->m_user->user_name, username) != 0){
         tmp = tmp->next;
 
-        if(tmp == NULL){
+        if(!tmp){
             return NULL;
         }
     }
-    pthread_mutex_unlock(list->list_mutex);
     
-    return tmp->m_user;
+    return tmp;
 }
 
 int send_user_list(userList_t * list, int * filedesc){
-    if((list == NULL)||(filedesc == NULL))
+    if((!list) || (!filedesc))
         return -1;
     
-    if(list->head != NULL){
+    if(list->head){
         char address[INET_ADDRSTRLEN+1];
         size_t length = (USER_NAME_LENGTH+INET_ADDRSTRLEN+21)*list->counter+1;
         char all_address_name[length];
         bzero(all_address_name,length);
         pthread_mutex_lock(list->list_mutex);
         listElem_t * tmp = list->head;
-        while(tmp!=NULL){
+        while(tmp){
             
             inet_ntop(AF_INET,(const struct sockaddr *)&tmp->m_user->user_address.sin_addr,address,INET_ADDRSTRLEN+1);
             strcat(all_address_name,address);
@@ -99,10 +118,10 @@ int send_user_list(userList_t * list, int * filedesc){
 }
 
 int display_user_list(userList_t * list){
-    if(list == NULL)
+    if(!list)
         return -1;
     
-    if(list->head != NULL){
+    if(list->head){
         char address[INET_ADDRSTRLEN+1];
         size_t length = (USER_NAME_LENGTH+INET_ADDRSTRLEN+21)*list->counter+1;
         char all_address_name[length];
@@ -110,7 +129,7 @@ int display_user_list(userList_t * list){
         
         pthread_mutex_lock(list->list_mutex);
         listElem_t * tmp = list->head;
-        while(tmp!=NULL){
+        while(tmp){
             
             inet_ntop(AF_INET,(const struct sockaddr *)&tmp->m_user->user_address.sin_addr,address,INET_ADDRSTRLEN+1);
             strcat(all_address_name,address);
@@ -120,7 +139,6 @@ int display_user_list(userList_t * list){
 
             tmp = tmp->next;
         }
-        list->counter--;
         pthread_mutex_unlock(list->list_mutex);
         printf("\n%s\n",all_address_name);
         return list->counter;        
@@ -131,39 +149,34 @@ int display_user_list(userList_t * list){
     }
 }
 
-int delete_user(userList_t * list, const char * name){
+int delete_user(userList_t * list, listElem_t * elem){
 
-    if((list == NULL)||(name == NULL))
+    if((!list) || (!elem))
         return -1;
 
-    pthread_mutex_lock(list->list_mutex);
-    listElem_t * tmp = list->head;
-    
-    if(list->head == NULL)
+    if(!list->head)
         return -1;
 
-    while(strcmp(tmp->m_user->user_name, name) != 0){
-        tmp = tmp->next;
-
-        if(tmp == NULL){
-            return -1;
+    if(elem == list->head){
+        if(list->head->next){
+            list->head = list->head->next;
+            list->head->prev = NULL;
         }
+        else
+            list->head = NULL;
     }
-    if(tmp->prev!=NULL)
-        tmp->prev->next = tmp->next;
-    if(tmp->next!=NULL)
-        tmp->next->prev = tmp->prev;
+    else{
+        if(elem->next){
+            elem->prev->next = elem->next;
+            elem->next->prev = elem->prev;
+        }  
+        else
+            elem->prev->next = NULL;
+    }
     
-    if(tmp==list->head){
-        list->head = tmp->next;
-    }
-    free(tmp->m_user->fildesc);
-    free(tmp->m_user);
-    free(tmp);
-    //tmp=NULL;
-    pthread_mutex_unlock(list->list_mutex);
-    printf("User deleted\n");
-    if(display_user_list(list)<0){  
-        printf("couldn't display in delete\n");
-    }
+    free(elem->m_user->fildesc);
+    free(elem->m_user);
+    free(elem);
+    list->counter--;
 }
+

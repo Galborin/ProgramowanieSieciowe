@@ -9,7 +9,7 @@ piotr
 #include "command_interface.h"
 
 /*imported------------------------------------------------------*/
-extern userList_t UserList;
+extern userList_t * UserList;
 
 /*private functions prototypes----------------------------------*/
 static int log_in(userList_t * list, user * usr);
@@ -29,27 +29,33 @@ void * client(user * connected_usr){
     int nreceived;
     char buffer[BUFFER_SIZE];
     static int test = 0;
-    log_in(&UserList, connected_usr); /*log in */
-    display_user_list(&UserList);
+    log_in(UserList, connected_usr); /*log in */
+    display_user_list(UserList);
     do{
-        while((nreceived = recv(*connected_usr->fildesc,buffer,BUFFER_SIZE,0))>0){
+        while((nreceived = recv(*connected_usr->fildesc,buffer,BUFFER_SIZE,0)) > 0){
             printf("%s(%lu): %s\n",connected_usr->user_name,strlen(buffer),buffer);
             command_proc(connected_usr->fildesc,buffer);
-            //if(send_user_list(&UserList,connected_usr->fildesc)<0){
-            //    printf("send_user_list() fail, %s \n", strerror(errno));
-            //  return NULL;
-            //}
         }
-    }while((nreceived<0) && (errno == EINTR));
+    }while((nreceived < 0) && (errno == EINTR));
 
-    if(nreceived<0){
-        printf("recv() fail, %s \n", strerror(errno));
-        return NULL;
+    if(nreceived < 0){
+        printf("recv() fail here, %s \n", strerror(errno));
     }
     
-    sleep(2);
-    if(delete_user(&UserList, connected_usr->user_name)<0){  
+    sleep(1);
+    /*delete user*/
+    pthread_mutex_lock(UserList->list_mutex);
+    listElem_t * delet_user = find_user_by_name(UserList, connected_usr->user_name);
+    if(!delet_user){
         printf("couldn't delete user\n");
+    }
+    if(delete_user(UserList, delet_user)<0){  
+        printf("couldn't delete user\n");
+    }
+    pthread_mutex_unlock(UserList->list_mutex);
+    printf("User deleted\n");
+    if(display_user_list(UserList) < 0){  
+        printf("couldn't display in delete\n");
     }
     printf("CLOSED\n");
     return NULL;
@@ -65,18 +71,15 @@ int log_in(userList_t * list, user * usr){
     if((usr==NULL)||(namebuff==NULL)||(list==NULL))
         return -1;
 
-    listElem_t * usrelem = (listElem_t*)malloc(sizeof(listElem_t));
-    usrelem->m_user = usr;
-
     char * msg = "Log in\nGive your name\n";
-    if(send(*usrelem->m_user->fildesc,(const void*)msg,strlen(msg)+1,0)<0){
+    if(send(*usr->fildesc,(const void*)msg,strlen(msg)+1,0)<0){
         printf("send() fail, %s \n", strerror(errno));
         return -1;
     }
 
     int nreceived;
     do{
-        nreceived = recv(*usrelem->m_user->fildesc,namebuff,BUFFER_SIZE,0);
+        nreceived = recv(*usr->fildesc,namebuff,BUFFER_SIZE,0);
         printf("Name given : %s\n", namebuff);
     }while((nreceived<0) && (errno == EINTR));
 
@@ -85,9 +88,12 @@ int log_in(userList_t * list, user * usr){
         return -1;
     }
 
-    strcpy(usrelem->m_user->user_name,namebuff);
-    store_element(list, usrelem);
-
+    strcpy(usr->user_name,namebuff);
+    pthread_mutex_lock(list->list_mutex);
+    if(store_element(list, usr) < 0){
+        printf("store_element() fail\n");
+    };
+    pthread_mutex_unlock(list->list_mutex);
     return list->counter;
 }
 

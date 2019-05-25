@@ -12,13 +12,17 @@ piotr
 extern void client(user * connected_usr);
 
 /*exported------------------------------------------------------*/
-userList_t UserList;
+userList_t * UserList;
 
 /*global--------------------------------------------------------*/
 pthread_mutex_t client_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 /*private functions prototypes----------------------------------*/
 static void sig_pipe(int signo);
+
+/*functions prototypes------------------------------------------*/
+int send_UserList(int * filedesc);
+void closefd(int * filedesc);
 
 /*main----------------------------------------------------------*/
 int main(){
@@ -70,20 +74,39 @@ int main(){
     }
 
     /*initialize UserList*/
-    if(userList_init(&UserList,&client_mutex)<0){
+    UserList = (userList_t *)malloc(sizeof(userList_t));
+    if(userList_init(UserList,&client_mutex)<0){
         printf("UserList initialization fail\n");
         return 1;
     }
 
     /*vvvvvvvvvvv here commands are being stored vvvvvvvvvvvv*/
 
+    /*send list of avilable command*/
     command listofcommands_task = {
         command_name: "?",
         func: (int(*)(int * ,void *))send_command_list 
     };
-
     if(store_command(&listofcommands_task)<0){
-        printf("store_command() fail\n");
+        printf("store_command() fail\n\r");
+    }
+    
+    /*send user list */
+    command sendusers_task = {
+        command_name: "!users",
+        func: (int(*)(int * ,void *))send_UserList 
+    };
+    if(store_command(&sendusers_task)<0){
+        printf("store_command() fail\n\r");
+    }
+    
+    /*close filedesc*/
+    command closeconnection_task = {
+        command_name: "!quit",
+        func: (int(*)(int * ,void *))closefd 
+    };
+    if(store_command(&closeconnection_task)<0){
+        printf("store_command() fail\n\r");
     }
 
     display_command_list();
@@ -116,7 +139,26 @@ int main(){
     return 0;
 }
 
+/*
+handle SIGPIPE.
+*/
 static void sig_pipe(int signo){
     printf("Received sigpipe, exit\n");
     exit(1);
+}
+
+/*
+send users from UserList function.
+Same as send_user_list() (from userlist.h) 
+but do not require userList_t argument
+*/
+int send_UserList(int * filedesc){
+    return send_user_list(UserList, filedesc);
+}
+
+/*
+close connection
+*/
+void closefd(int * filedesc){
+    close(*filedesc);
 }

@@ -16,10 +16,10 @@ typedef struct user{
 }user;
 
 /*list element structure*/
-typedef struct listElem_t{
+typedef struct listElem{
     user * m_user;
-    struct listElem_t * next;
-    struct listElem_t * prev;
+    struct listElem * next;
+    struct listElem * prev;
 }listElem_t;
 
 /*list structure*/
@@ -38,17 +38,17 @@ Return -1 if error.
 int userList_init(userList_t * list, pthread_mutex_t * mutex);
 
 /*
-store element at the end of the list.
-If list is empty (head is NULL), head becomes element.
-If element is NULL, return -1.
+create element with given data and store at the beginning of the list.
+If list is empty (head is NULL), data is stored as head.
+If failed, return -1.
 */
-int store_element(userList_t * list, listElem_t * element);
+int store_element(userList_t * list, user * usr);
 
 /*
-return user from list with name equals to given.
+return element from list with name equal to given.
 If there is no such user, return NULL.
 */
-user * find_user_by_name(userList_t * list, const char * username);
+listElem_t * find_user_by_name(userList_t * list, const char * username);
 
 /*
 Combine addresses and names of all users from list 
@@ -64,10 +64,10 @@ Return -1 if error.
 */
 int display_user_list(userList_t * list);
 
-/*Delete user with name equal to given from list.
+/*Delete element from list.
 Return number of elements in list.
 Return -1 if error.
 */
-int delete_user(userList_t * list, const char * name);
+int delete_user(userList_t * list, listElem_t * elem);
 
 #endif
