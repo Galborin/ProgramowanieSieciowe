@@ -59,12 +59,12 @@ int send_user_list(userList_t * list, int * filedesc){
     if((!list) || (!filedesc))
         return -1;
     
+    pthread_mutex_lock(list->list_mutex);
     if(list->head){
         char address[INET_ADDRSTRLEN+1];
         size_t length = (USER_NAME_LENGTH+INET_ADDRSTRLEN+21)*list->counter+1;
         char all_address_name[length];
         bzero(all_address_name,length);
-        pthread_mutex_lock(list->list_mutex);
         listElem_t * tmp = list->head;
         while(tmp){
             
@@ -96,14 +96,14 @@ int send_user_list(userList_t * list, int * filedesc){
 int display_user_list(userList_t * list){
     if(!list)
         return -1;
-    
+
+    pthread_mutex_lock(list->list_mutex);
     if(list->head){
         char address[INET_ADDRSTRLEN+1];
         size_t length = (USER_NAME_LENGTH+INET_ADDRSTRLEN+21)*list->counter+1;
         char all_address_name[length];
         bzero(all_address_name,length);
         
-        pthread_mutex_lock(list->list_mutex);
         listElem_t * tmp = list->head;
         while(tmp){
             
@@ -153,6 +153,29 @@ int delete_user(userList_t * list, listElem_t * elem){
     free(elem->m_user->fildesc);
     free(elem->m_user);
     free(elem);
-    list->counter--;
+    return --list->counter;
+}
+
+int send_to_all(userList_t * list, char * message){
+    if((!list) || (!message))
+        return -1;
+    
+    pthread_mutex_lock(list->list_mutex);
+    if(list->head){
+        listElem_t * tmp = list->head;
+        
+        while(tmp){
+            if(send(*tmp->m_user->fildesc,message,strlen(message)+1,0) < 0){
+                printf("send() fail, %s \n", strerror(errno));
+            }
+            tmp = tmp->next;
+        }
+        pthread_mutex_unlock(list->list_mutex);
+        
+        return list->counter;        
+    }
+    else{
+        return -1;
+    }
 }
 

@@ -24,6 +24,7 @@ static int command_proc(int * filedesc, const char * input);
 function to handle clients.
 Calls log_in() first.
 Then handle client requests.
+Delete user if connection lost.
 */
 void * client(user * connected_usr){    
     int nreceived;
@@ -31,10 +32,14 @@ void * client(user * connected_usr){
     static int test = 0;
     log_in(UserList, connected_usr); /*log in */
     display_user_list(UserList);
+    int namelen = strlen(connected_usr->user_name);
+    strcpy(buffer, connected_usr->user_name);
+    buffer[namelen] = ':';
     do{
-        while((nreceived = recv(*connected_usr->fildesc,buffer,BUFFER_SIZE,0)) > 0){
-            printf("%s(%lu): %s\n",connected_usr->user_name,strlen(buffer),buffer);
-            command_proc(connected_usr->fildesc,buffer);
+        while((nreceived = recv(*connected_usr->fildesc,buffer + namelen + 1,BUFFER_SIZE,0)) > 0){
+            printf("%s\n",buffer);
+            if((command_proc(connected_usr->fildesc,buffer + namelen + 1)) < 0)
+                send_to_all(UserList, buffer);
         }
     }while((nreceived < 0) && (errno == EINTR));
 
@@ -47,15 +52,15 @@ void * client(user * connected_usr){
     pthread_mutex_lock(UserList->list_mutex);
     listElem_t * delet_user = find_user_by_name(UserList, connected_usr->user_name);
     if(!delet_user){
-        printf("couldn't delete user\n");
+        printf("couldn't delete user - not found\n");
     }
     if(delete_user(UserList, delet_user)<0){  
-        printf("couldn't delete user\n");
+        printf("couldn't delete user - delete_user() fail\n");
     }
     pthread_mutex_unlock(UserList->list_mutex);
     printf("User deleted\n");
     if(display_user_list(UserList) < 0){  
-        printf("couldn't display in delete\n");
+        printf("display_user_list() fail()\n");
     }
     printf("CLOSED\n");
     return NULL;
@@ -119,6 +124,8 @@ static int command_proc(int * filedesc, const char * input){
 
     command * found;
     if(!(found = find_command_by_name(input))){
+        if(space)
+            *space = ' ';
         return -1; /*there is no such command*/
     }
     else{

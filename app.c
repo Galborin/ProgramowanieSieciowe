@@ -13,7 +13,7 @@ extern void client(user * connected_usr);
 
 /*exported------------------------------------------------------*/
 userList_t * UserList;
-    
+
 /*global--------------------------------------------------------*/
 pthread_mutex_t client_mutex = PTHREAD_MUTEX_INITIALIZER;
 
@@ -122,17 +122,20 @@ int main(){
         if((*connectfd=accept(listenfd,(struct sockaddr*)&cliaddress,&cliaddresslength))<0){
             printf("accept() fail, %s \n", strerror(errno));
         }
-        inet_ntop(AF_INET,(const struct sockaddr *)&cliaddress.sin_addr,address,sizeof(address));
-        printf("\nConnection from: %s\n",address);
+        else{
+            inet_ntop(AF_INET,(const struct sockaddr *)&cliaddress.sin_addr,address,sizeof(address));
+            printf("\nConnection from: %s\n",address);
 
-        user * conn_user = calloc(1, sizeof(user)); /*allocate memory for new user */
-        conn_user->user_address = cliaddress;
-        conn_user->fildesc = connectfd;
+            user * conn_user = calloc(1, sizeof(user)); /*allocate memory for new user */
+            conn_user->user_address = cliaddress;
+            conn_user->fildesc = connectfd;
         
-        pthread_t thread; /*new thread*/
+            pthread_t thread; /*new thread*/
 
-        pthread_create(&thread, NULL, (void *(*)(void *))client, (void *)conn_user); /*create thread*/
-        pthread_detach(thread);
+            pthread_create(&thread, NULL, (void *(*)(void *))client, (void *)conn_user); /*create thread*/
+            pthread_detach(thread);
+        }
+        sleep(1);
     }
 
     delete_command_list();
@@ -143,8 +146,7 @@ int main(){
 handle SIGPIPE.
 */
 static void sig_pipe(int signo){
-    printf("Received sigpipe, exit\n");
-    exit(1);
+    printf("Received sigpipe\n");
 }
 
 /*

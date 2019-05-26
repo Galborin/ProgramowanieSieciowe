@@ -70,4 +70,10 @@ Return -1 if error.
 */
 int delete_user(userList_t * list, listElem_t * elem);
 
+/*
+send message to all users in list.
+Return -1 if failed.
+*/
+int send_to_all(userList_t * list, char * message);
+
 #endif
