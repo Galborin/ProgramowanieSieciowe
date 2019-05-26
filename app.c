@@ -63,6 +63,9 @@ int main(){
         return 1;
     }
 
+    int flags = fcntl(listenfd, F_GETFL, 0);
+    fcntl(listenfd, F_SETFL, flags | O_NONBLOCK);
+
     if(bind(listenfd,(struct sockaddr *)&myaddress,sizeof(myaddress))<0){
         printf("bind() fail: %s \n", strerror(errno));    
         return 1;
@@ -120,7 +123,8 @@ int main(){
         cliaddresslength = sizeof(cliaddress);
         int * connectfd = (int*)malloc(sizeof(int));
         if((*connectfd=accept(listenfd,(struct sockaddr*)&cliaddress,&cliaddresslength))<0){
-            printf("accept() fail, %s \n", strerror(errno));
+            if((errno != EAGAIN) && (errno != EWOULDBLOCK))
+                printf("accept() fail, %s \n", strerror(errno));
         }
         else{
             inet_ntop(AF_INET,(const struct sockaddr *)&cliaddress.sin_addr,address,sizeof(address));

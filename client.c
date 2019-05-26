@@ -30,7 +30,11 @@ void * client(user * connected_usr){
     int nreceived;
     char buffer[BUFFER_SIZE];
     static int test = 0;
-    log_in(UserList, connected_usr); /*log in */
+    /*log in */
+    if(log_in(UserList, connected_usr) < 0){ 
+        printf("log_in() fail\n\r");
+        return NULL;
+    } 
     display_user_list(UserList);
     int namelen = strlen(connected_usr->user_name);
     strcpy(buffer, connected_usr->user_name);
@@ -41,7 +45,7 @@ void * client(user * connected_usr){
             if((command_proc(connected_usr->fildesc,buffer + namelen + 1)) < 0)
                 send_to_all(UserList, buffer);
         }
-    }while((nreceived < 0) && (errno == EINTR));
+    }while((nreceived<0) && ((errno == EINTR) || (errno == EAGAIN) || (errno == EWOULDBLOCK)));
 
     if(nreceived < 0){
         printf("recv() fail here, %s \n", strerror(errno));
@@ -90,7 +94,7 @@ int log_in(userList_t * list, user * usr){
         do{
             nreceived = recv(*usr->fildesc,namebuff,BUFFER_SIZE,0);
             printf("Name given : %s\n", namebuff);
-        }while((nreceived<0) && (errno == EINTR));
+        }while((nreceived<0) && ((errno == EINTR) || (errno == EAGAIN) || (errno == EWOULDBLOCK)));
 
         if(nreceived<0){
             printf("recv() fail, %s \n", strerror(errno));
