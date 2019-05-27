@@ -9,7 +9,7 @@ piotr
 #include "command_interface.h"
 
 /*imported------------------------------------------------------*/
-extern void client(user * connected_usr);
+extern void * client(user * connected_usr);
 
 /*exported------------------------------------------------------*/
 userList_t * UserList;
@@ -28,7 +28,8 @@ void closefd(int * filedesc);
 int main(){
     pid_t forkpid;
     pid_t newsid;
-    int listenfd;
+    int listenfd, udp_socket;
+    char buffer[BUFFER_SIZE];
     struct sockaddr_in myaddress, cliaddress;
     char address[INET_ADDRSTRLEN+1];
     socklen_t cliaddresslength;
@@ -57,6 +58,11 @@ int main(){
         return 1;
     }
 
+    if((udp_socket = socket(AF_INET,SOCK_DGRAM,0))<0){
+        printf("socket() fail: %s \n", strerror(errno));
+        return 1;
+    }
+
     int reuse = 1;
     if(setsockopt(listenfd,SOL_SOCKET,SO_REUSEADDR,(const void *)&reuse,sizeof(reuse))<0){
         printf("setsockopt() fail: %s \n", strerror(errno));
@@ -66,7 +72,15 @@ int main(){
     int flags = fcntl(listenfd, F_GETFL, 0);
     fcntl(listenfd, F_SETFL, flags | O_NONBLOCK);
 
+    flags = fcntl(udp_socket, F_GETFL, 0);
+    fcntl(udp_socket, F_SETFL, flags | O_NONBLOCK);
+
     if(bind(listenfd,(struct sockaddr *)&myaddress,sizeof(myaddress))<0){
+        printf("bind() fail: %s \n", strerror(errno));    
+        return 1;
+    }
+
+    if(bind(udp_socket,(struct sockaddr *)&myaddress,sizeof(myaddress))<0){
         printf("bind() fail: %s \n", strerror(errno));    
         return 1;
     }
@@ -118,10 +132,13 @@ int main(){
 
     signal(SIGPIPE, sig_pipe);
 
+    int * connectfd = (int*)malloc(sizeof(int));
     int n = 0;
     while(1){ /*main loop*/
         cliaddresslength = sizeof(cliaddress);
-        int * connectfd = (int*)malloc(sizeof(int));
+
+        /*TCP************************************************/
+
         if((*connectfd=accept(listenfd,(struct sockaddr*)&cliaddress,&cliaddresslength))<0){
             if((errno != EAGAIN) && (errno != EWOULDBLOCK))
                 printf("accept() fail, %s \n", strerror(errno));
@@ -138,7 +155,21 @@ int main(){
 
             pthread_create(&thread, NULL, (void *(*)(void *))client, (void *)conn_user); /*create thread*/
             pthread_detach(thread);
+            connectfd = (int*)malloc(sizeof(int));
         }
+
+        /*UDP************************************************/
+
+        if((n = recvfrom(udp_socket, buffer, BUFFER_SIZE, 0 , (struct sockaddr*)&cliaddress,&cliaddresslength)) < 0){
+            if((errno != EAGAIN) && (errno != EWOULDBLOCK))
+                printf("recvfrom() fail, %s \n", strerror(errno));
+        }
+        else{
+            inet_ntop(AF_INET,(const struct sockaddr *)&cliaddress.sin_addr,address,sizeof(address));
+            printf("\nConnection from on UDP socket: %s\n",address);
+        }
+
+
         sleep(1);
     }
 
