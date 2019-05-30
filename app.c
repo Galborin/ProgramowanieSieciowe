@@ -1,29 +1,35 @@
+/*
+piotr
+22.05.2019
+*/
+
+/*includes------------------------------------------------------*/
 #include "app.h"
+#include "userlist.h"
+#include "command_interface.h"
 
-extern int send_echo(int destfd, void * ptr, int n);
-extern void my_echo(int destfd, void * ptr, size_t length);
-extern struct sockaddr * client(int clifd, const void * ptr, size_t length);
-extern user * log_in(int clifd, struct sockaddr_in * usraddr);
-extern void display_user_list();
-extern int delete_user(const char * del_user_name);
+/*imported------------------------------------------------------*/
+extern void * client(user * connected_usr);
 
-void sig_child(int signo){
-    pid_t	pid;
-    int stat_loc;
-    while((pid = waitpid(-1,&stat_loc,WNOHANG))>0){
-        printf("Child %d terminated\n",pid);
-    }
-}
+/*exported------------------------------------------------------*/
+userList_t * UserList;
 
-void sig_pipe(int signo){
-	printf("Server received SIGPIPE - Default action is exit \n");
-	//exit(1);
-}
+/*global--------------------------------------------------------*/
+pthread_mutex_t client_mutex = PTHREAD_MUTEX_INITIALIZER;
 
+/*private functions prototypes----------------------------------*/
+static void sig_pipe(int signo);
+
+/*functions prototypes------------------------------------------*/
+int send_UserList(int * filedesc);
+void closefd(int * filedesc);
+
+/*main----------------------------------------------------------*/
 int main(){
     pid_t forkpid;
     pid_t newsid;
-    int listenfd, connectfd;
+    int listenfd, udp_socket;
+    char buffer[BUFFER_SIZE];
     struct sockaddr_in myaddress, cliaddress;
     char address[INET_ADDRSTRLEN+1];
     socklen_t cliaddresslength;
@@ -31,23 +37,28 @@ int main(){
     myaddress.sin_port = htons(5454);
     myaddress.sin_addr.s_addr = INADDR_ANY;
 
-    forkpid = fork(); /*create child process*/
-    if(forkpid < 0){ /*error*/
-        printf("fork() fail, %s \n", strerror(errno));
-        exit(1); 
-    }
-    if(forkpid > 0){ /*kill parent*/
-        exit(0);
-    }
-    if ( forkpid == 0) {	/* execute in child process */
-        newsid = setsid();
-        if(newsid < 0){ /*error*/
-            printf("setsid() fail, %s \n", strerror(errno));
-            exit(1);
-        }
-    }    
+    //forkpid = fork(); /*create child process*/
+    //if(forkpid < 0){ /*error*/
+    //    printf("fork() fail, %s \n", strerror(errno));
+    //    exit(1); 
+    //}
+    //if(forkpid > 0){ /*kill parent*/
+    //    exit(0);
+   // }
+   // if ( forkpid == 0) {  /* execute in child process */
+    //    newsid = setsid();
+     //   if(newsid < 0){ /*error*/
+     //       printf("setsid() fail, %s \n", strerror(errno));
+      //      exit(1);
+       // }
+    //}    
 
     if((listenfd = socket(AF_INET,SOCK_STREAM,0))<0){
+        printf("socket() fail: %s \n", strerror(errno));
+        return 1;
+    }
+
+    if((udp_socket = socket(AF_INET,SOCK_DGRAM,0))<0){
         printf("socket() fail: %s \n", strerror(errno));
         return 1;
     }
@@ -58,7 +69,18 @@ int main(){
         return 1;
     }
 
+    int flags = fcntl(listenfd, F_GETFL, 0);
+    fcntl(listenfd, F_SETFL, flags | O_NONBLOCK);
+
+    flags = fcntl(udp_socket, F_GETFL, 0);
+    fcntl(udp_socket, F_SETFL, flags | O_NONBLOCK);
+
     if(bind(listenfd,(struct sockaddr *)&myaddress,sizeof(myaddress))<0){
+        printf("bind() fail: %s \n", strerror(errno));    
+        return 1;
+    }
+
+    if(bind(udp_socket,(struct sockaddr *)&myaddress,sizeof(myaddress))<0){
         printf("bind() fail: %s \n", strerror(errno));    
         return 1;
     }
@@ -68,56 +90,112 @@ int main(){
         return 1;
     }
 
-    signal(SIGCHLD, sig_child);
+    /*initialize UserList*/
+    UserList = (userList_t *)malloc(sizeof(userList_t));
+    if(userList_init(UserList,&client_mutex)<0){
+        printf("UserList initialization fail\n");
+        return 1;
+    }
+
+    /*vvvvvvvvvvv here commands are being stored vvvvvvvvvvvv*/
+
+    /*send list of avilable command*/
+    command listofcommands_task = {
+        command_name: "?",
+        func: (int(*)(int * ,void *))send_command_list 
+    };
+    if(store_command(&listofcommands_task)<0){
+        printf("store_command() fail\n\r");
+    }
+    
+    /*send user list */
+    command sendusers_task = {
+        command_name: "!users",
+        func: (int(*)(int * ,void *))send_UserList 
+    };
+    if(store_command(&sendusers_task)<0){
+        printf("store_command() fail\n\r");
+    }
+    
+    /*close filedesc*/
+    command closeconnection_task = {
+        command_name: "!quit",
+        func: (int(*)(int * ,void *))closefd 
+    };
+    if(store_command(&closeconnection_task)<0){
+        printf("store_command() fail\n\r");
+    }
+
+    display_command_list();
+
+    /*^^^^^^^^^^ here commands are being stored ^^^^^^^^^^^^*/
+
     signal(SIGPIPE, sig_pipe);
 
+    int * connectfd = (int*)malloc(sizeof(int));
     int n = 0;
-    while(1){
+    while(1){ /*main loop*/
         cliaddresslength = sizeof(cliaddress);
-        if((connectfd=accept(listenfd,(struct sockaddr*)&cliaddress,&cliaddresslength))<0){
-            printf("accept() fail, %s \n", strerror(errno));
-            return 1;
+
+        /*TCP************************************************/
+
+        if((*connectfd=accept(listenfd,(struct sockaddr*)&cliaddress,&cliaddresslength))<0){
+            if((errno != EAGAIN) && (errno != EWOULDBLOCK))
+                printf("accept() fail, %s \n", strerror(errno));
         }
         else{
             inet_ntop(AF_INET,(const struct sockaddr *)&cliaddress.sin_addr,address,sizeof(address));
-            printf("Connection from: %s\n",address);
+            printf("\nConnection from: %s\n",address);
+
+            user * conn_user = calloc(1, sizeof(user)); /*allocate memory for new user */
+            conn_user->user_address = cliaddress;
+            conn_user->fildesc = connectfd;
+        
+            pthread_t thread; /*new thread*/
+
+            pthread_create(&thread, NULL, (void *(*)(void *))client, (void *)conn_user); /*create thread*/
+            pthread_detach(thread);
+            connectfd = (int*)malloc(sizeof(int));
         }
 
-        char * msg = "HELLO";
-        /*if(send(connectfd,(const void*)msg,strlen(msg)+1,0)<0){
-            printf("send() fail, %s \n", strerror(errno));
+        /*UDP************************************************/
+
+        if((n = recvfrom(udp_socket, buffer, BUFFER_SIZE, 0 , (struct sockaddr*)&cliaddress,&cliaddresslength)) < 0){
+            if((errno != EAGAIN) && (errno != EWOULDBLOCK))
+                printf("recvfrom() fail, %s \n", strerror(errno));
         }
         else{
-            printf("sended Hello Message %d \n", (int)strlen(msg)+1);
-        }*/
-
-        char buffer[BUFFER_SIZE];
-        
-        forkpid = fork();
-
-        if(forkpid < 0){ /*error*/
-            printf("fork() fail, %s \n", strerror(errno));
-            exit(1); 
+            inet_ntop(AF_INET,(const struct sockaddr *)&cliaddress.sin_addr,address,sizeof(address));
+            printf("\nConnection from on UDP socket: %s\n",address);
         }
 
-        if(forkpid == 0){ /*execute in child process */
-            close(listenfd);
 
-            /*log in */
-            user * myuser = log_in(connectfd, &cliaddress);
-            msg = "\nLOGGED IN\n\n";
-            if(send(connectfd,(const void*)msg,strlen(msg)+1,0)<0){
-                printf("send() fail, %s \n", strerror(errno));
-            }
-            printf("\nLOGGED IN :\n\n");
-            display_user_list();
-            my_echo(connectfd,buffer,BUFFER_SIZE);
-            client(connectfd, buffer, BUFFER_SIZE);
-            printf("\nDELETED %i:\n\n", delete_user(myuser->user_name));
-            sleep(1);
-            exit(0);
-        }
-        close(connectfd); 
+        sleep(1);
     }
+
+    delete_command_list();
     return 0;
+}
+
+/*
+handle SIGPIPE.
+*/
+static void sig_pipe(int signo){
+    printf("Received sigpipe\n");
+}
+
+/*
+send users from UserList function.
+Same as send_user_list() (from userlist.h) 
+but do not require userList_t argument
+*/
+int send_UserList(int * filedesc){
+    return send_user_list(UserList, filedesc);
+}
+
+/*
+close connection
+*/
+void closefd(int * filedesc){
+    close(*filedesc);
 }
