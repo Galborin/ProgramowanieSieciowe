@@ -8,24 +8,17 @@
 /*includes------------------------------------------------------*/
 #include "app.h"
 
-/*user structure*/
-typedef struct user{
-    char user_name[USER_NAME_LENGTH];
-    struct sockaddr_in user_address;
-    int * fildesc;
-}user;
-
-/*list element structure*/
+/*user list element typedef*/
 typedef struct listElem{
-    user * m_user;
+    user_t * m_user;
     struct listElem * next;
     struct listElem * prev;
 }listElem_t;
 
-/*list structure*/
+/*user list typedef*/
 typedef struct userList{
     listElem_t * head;
-    pthread_mutex_t * list_mutex;
+    pthread_mutex_t list_mutex;
     int counter;
 }userList_t;
 
@@ -35,14 +28,14 @@ typedef struct userList{
 initialize userList_t structure.
 Return -1 if error.
 */
-int userList_init(userList_t * list, pthread_mutex_t * mutex);
+int userList_init(userList_t * list);
 
 /*
 create element with given data and store at the beginning of the list.
 If list is empty (head is NULL), data is stored as head.
 If failed, return -1.
 */
-int store_element(userList_t * list, user * usr);
+int store_element(userList_t * list, user_t * usr);
 
 /*
 return element from list with name equal to given.
@@ -56,7 +49,7 @@ into one message and send it through filedesc.
 Return number of elements in list (0 if empty).
 Return -1 if error.
 */
-int send_user_list(userList_t * list, int * filedesc);
+int send_user_list(userList_t * list, user_t * usr);
 
 /*Display address and name of every user from list.
 Return number of elements in list.

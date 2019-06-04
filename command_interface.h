@@ -10,8 +10,8 @@
 
 /*command structure*/
 typedef struct command{
-    char command_name[MAX_CMD_LENGTH];
-    int (*func)(int * filedesc, void * args);
+    char command_name[MAX_CMD_LENGTH + 1];
+    int (*func)(user_t * usr, void * args);
 }command;
 
 /*command list element*/
@@ -46,7 +46,7 @@ send command list to user.
 Return command_counter.
 Return -1 if error.
 */
-int send_command_list(int * filedesc);
+int send_command_list(user_t * usr);
 
 /*
 display command list.

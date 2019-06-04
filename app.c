@@ -3,26 +3,31 @@ piotr
 22.05.2019
 */
 
+
 /*includes------------------------------------------------------*/
 #include "app.h"
 #include "userlist.h"
 #include "command_interface.h"
+#include "chatroom.h"
 
 /*imported------------------------------------------------------*/
-extern void * client(user * connected_usr);
+extern void * client(user_t * connected_usr);
 
 /*exported------------------------------------------------------*/
-userList_t * UserList;
+userList_t UserList;
+chatList_t ChatList;
 
 /*global--------------------------------------------------------*/
-pthread_mutex_t client_mutex = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t chatlist_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 /*private functions prototypes----------------------------------*/
 static void sig_pipe(int signo);
 
 /*functions prototypes------------------------------------------*/
-int send_UserList(int * filedesc);
-void closefd(int * filedesc);
+int send_UserList(user_t * usr);
+void closefd(user_t * usr);
+int ChatList_send_list(user_t * usr);
+int ChatList_create_and_join_chatroom(user_t * usr, void * name);
 
 /*main----------------------------------------------------------*/
 int main(){
@@ -91,44 +96,67 @@ int main(){
     }
 
     /*initialize UserList*/
-    UserList = (userList_t *)malloc(sizeof(userList_t));
-    if(userList_init(UserList,&client_mutex)<0){
+    if(userList_init(&UserList) < 0){
         printf("UserList initialization fail\n");
         return 1;
     }
 
-    /*vvvvvvvvvvv here commands are being stored vvvvvvvvvvvv*/
+    /*initialize ChatList*/
+    if(chList_init(&ChatList,&chatlist_mutex) < 0){
+        printf("UserList initialization fail\n");
+        return 1;
+    }
 
-    /*send list of avilable command*/
+    /*vvvvvvvvvvv here commands are being stored vvvvvvvvvvvv*//*vvvvvvvvvvv here commands are being stored vvvvvvvvvvvv*/
+
+    /*send list of avilable commands*/
     command listofcommands_task = {
         command_name: "?",
-        func: (int(*)(int * ,void *))send_command_list 
+        func: (int(*)(user_t * ,void *))send_command_list 
     };
-    if(store_command(&listofcommands_task)<0){
+    if(store_command(&listofcommands_task) < 0){
         printf("store_command() fail\n\r");
     }
     
     /*send user list */
     command sendusers_task = {
         command_name: "!users",
-        func: (int(*)(int * ,void *))send_UserList 
+        func: (int(*)(user_t * ,void *))send_UserList 
     };
-    if(store_command(&sendusers_task)<0){
+    if(store_command(&sendusers_task) < 0){
+        printf("store_command() fail\n\r");
+    }
+
+    /*send chatroom list */
+    command sendchatrooms_task = {
+        command_name: "!chats",
+        func: (int(*)(user_t * ,void *))ChatList_send_list 
+    };
+    if(store_command(&sendchatrooms_task) < 0){
         printf("store_command() fail\n\r");
     }
     
+    /*create and join chatroom*/
+    command createchatroom_task = {
+        command_name: "!create",
+        func: (int(*)(user_t * ,void *))ChatList_create_and_join_chatroom
+    };
+    if(store_command(&createchatroom_task) < 0){
+        printf("store_command() fail\n\r");
+    }
+
     /*close filedesc*/
     command closeconnection_task = {
         command_name: "!quit",
-        func: (int(*)(int * ,void *))closefd 
+        func: (int(*)(user_t * ,void *))closefd 
     };
-    if(store_command(&closeconnection_task)<0){
+    if(store_command(&closeconnection_task) < 0){
         printf("store_command() fail\n\r");
     }
 
     display_command_list();
 
-    /*^^^^^^^^^^ here commands are being stored ^^^^^^^^^^^^*/
+    /*^^^^^^^^^^ here commands are being stored ^^^^^^^^^^^^*//*^^^^^^^^^^ here commands are being stored ^^^^^^^^^^^^*/
 
     signal(SIGPIPE, sig_pipe);
 
@@ -147,7 +175,7 @@ int main(){
             inet_ntop(AF_INET,(const struct sockaddr *)&cliaddress.sin_addr,address,sizeof(address));
             printf("\nConnection from: %s\n",address);
 
-            user * conn_user = calloc(1, sizeof(user)); /*allocate memory for new user */
+            user_t * conn_user = calloc(1, sizeof(user_t)); /*allocate memory for new user_t */
             conn_user->user_address = cliaddress;
             conn_user->fildesc = connectfd;
         
@@ -185,17 +213,45 @@ static void sig_pipe(int signo){
 }
 
 /*
-send users from UserList function.
+Send users from UserList.
 Same as send_user_list() (from userlist.h) 
-but do not require userList_t argument
+but does not require userList_t argument
 */
-int send_UserList(int * filedesc){
-    return send_user_list(UserList, filedesc);
+int send_UserList(user_t * usr){
+    if(usr)
+        return send_user_list(&UserList, usr);
+    
+    return -1;
+}
+
+/*
+Send chatrooms from ChatList.
+Same as chList_send_list() (from chatroom.h) 
+but does not require chatList_t argument
+*/
+int ChatList_send_list(user_t * usr){
+    if(usr)
+        return chList_send_list(&ChatList, usr);
+    
+    return -1;
+}
+
+/*
+Function based on chRoom_create_and_join() (from chatroom.h),
+but always takes ChatList as argument. 
+*/
+int ChatList_create_and_join_chatroom(user_t * usr, void * name){
+
+    if((usr) && (name)){
+        return chRoom_create_and_join(usr,&ChatList,(char *)name);
+    }
+
+    return -1;
 }
 
 /*
 close connection
 */
-void closefd(int * filedesc){
-    close(*filedesc);
+void closefd(user_t * usr){
+    close(*usr->fildesc);
 }
