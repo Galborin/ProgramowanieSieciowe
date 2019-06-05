@@ -10,10 +10,7 @@ piotr
 #include "app.h"
 #include "userlist.h"
 
-/*defines------------------------------------------------------*/
-#define CHAT_NAME_LENGTH 20
-
-/*chat room typedef*/
+/*chatroom typedef*/
 typedef struct chatroom{
     char chatname[CHAT_NAME_LENGTH + 1];
     userList_t * chat_userlist;
@@ -32,6 +29,8 @@ typedef struct chatList{
     pthread_mutex_t * list_mutex;
     int counter;
 }chatList_t;
+
+/*function declarations------------------------------------------*/
 
 /*
 initialize chatList_t structure.

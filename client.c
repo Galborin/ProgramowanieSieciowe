@@ -10,8 +10,8 @@ piotr
 #include "chatroom.h"
 
 /*imported------------------------------------------------------*/
-extern userList_t UserList;
-extern chatList_t ChatList;
+extern userList_t GlobalUserList;
+extern chatList_t GlobalChatList;
 
 /*private functions prototypes----------------------------------*/
 static int log_in(userList_t * list, user_t * usr);
@@ -31,24 +31,32 @@ Delete user_t if connection lost.
 void * client(user_t * connected_usr){    
     int nreceived;
     char buffer[BUFFER_SIZE];
-    static int test = 0;
     /*log in */
-    if(log_in(&UserList, connected_usr) < 0){ 
+    if(log_in(&GlobalUserList, connected_usr) < 0){ 
         printf("log_in() fail\n\r");
         return NULL;
     } 
-    display_user_list(&UserList);
+    display_user_list(&GlobalUserList);
     int namelen = strlen(connected_usr->user_name);
     strcpy(buffer, connected_usr->user_name);
     buffer[namelen] = ':';
+    chatListElem_t * user_chatroom = NULL;
     do{
         while((nreceived = recv(*connected_usr->fildesc,buffer + namelen + 1,BUFFER_SIZE,0)) > 0){
             printf("%s\n",buffer);
-            if((command_proc(connected_usr,buffer + namelen + 1)) < 0)
-                ;//send_command_list(connected_usr);
-                //send_to_all(&UserList, buffer);
-            else
+            if((command_proc(connected_usr,buffer + namelen + 1)) > 0)
                 printf("Command called successfully\n\r");
+            else{
+                /*check if chatroom is available*/
+                if(connected_usr->chatroom_name){
+                    if((user_chatroom = chList_find_chatroom_by_name(&GlobalChatList, connected_usr->chatroom_name))){
+                        send_to_all(user_chatroom->m_chatroom->chat_userlist, buffer);
+                    }
+                }
+                else if(send(*connected_usr->fildesc,"NOT CONNECTED TO ANY CHAT\n\r",28,0) < 0){
+                    printf("send() fail, %s \n", strerror(errno));
+                }
+            }  
         }
     }while((nreceived<0) && ((errno == EINTR) || (errno == EAGAIN) || (errno == EWOULDBLOCK)));
 
@@ -56,19 +64,19 @@ void * client(user_t * connected_usr){
         printf("recv() fail here, %s \n", strerror(errno));
     }
     
-    sleep(1);
+
     /*delete user_t*/
-    pthread_mutex_lock(&UserList.list_mutex);
-    listElem_t * delet_user = find_user_by_name(&UserList, connected_usr->user_name);
+    pthread_mutex_lock(&GlobalUserList.list_mutex);
+    listElem_t * delet_user = find_user_by_name(&GlobalUserList, connected_usr->user_name);
     if(!delet_user){
         printf("couldn't delete user_t - not found\n");
     }
-    if(delete_user(&UserList, delet_user)<0){  
+    if(delete_user(&GlobalUserList, delet_user)<0){  
         printf("couldn't delete user_t - delete_user() fail\n");
     }
-    pthread_mutex_unlock(&UserList.list_mutex);
+    pthread_mutex_unlock(&GlobalUserList.list_mutex);
     printf("User deleted\n");
-    if(display_user_list(&UserList) < 0){  
+    if(display_user_list(&GlobalUserList) < 0){  
         printf("display_user_list() fail()\n");
     }
     printf("CLOSED\n");
@@ -105,8 +113,12 @@ int log_in(userList_t * list, user_t * usr){
             printf("recv() fail, %s \n", strerror(errno));
             return -1;
         }
+        
+        pthread_mutex_lock(&GlobalUserList.list_mutex);
+        result = find_user_by_name(list,namebuff);
+        pthread_mutex_unlock(&GlobalUserList.list_mutex);
 
-    }while(result = find_user_by_name(list,namebuff)); /*check if name is not taken by someone*/
+    }while(result); /*check if name is not taken by someone*/
     
     strcpy(usr->user_name,namebuff);
     pthread_mutex_lock(&list->list_mutex);

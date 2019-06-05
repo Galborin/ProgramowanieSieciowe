@@ -29,8 +29,7 @@ int chRoom_create_and_join(user_t * usr, chatList_t * list, char * ch_name){
     if(strlen(ch_name) > CHAT_NAME_LENGTH){
         printf("name too long\n\r");
         return -1;
-    }
-        
+    }    
     strcpy(new_chtrm->chatname,ch_name);
 
     /*create chatroom's user list*/
@@ -42,7 +41,7 @@ int chRoom_create_and_join(user_t * usr, chatList_t * list, char * ch_name){
     }
         
     new_chtrm->chat_userlist = new_userlist;
-    
+
     chatListElem_t * newelem;
 
     pthread_mutex_lock(list->list_mutex);
@@ -211,7 +210,10 @@ int chList_join_chatroom(chatList_t * list, chatListElem_t * elem, user_t * usr)
     }
 
     pthread_mutex_unlock(&elem->m_chatroom->chat_userlist->list_mutex);
-    
+
+    /*set as new user's chatroom*/
+    usr->chatroom_name = elem->m_chatroom->chatname;
+
     return ++elem->m_chatroom->chat_userlist->counter;
     
 }
@@ -230,6 +232,3 @@ int chList_leave_chatroom(chatList_t * list, chatListElem_t * elem, listElem_t *
     
     return --elem->m_chatroom->chat_userlist->counter;
 }
-
-
-
