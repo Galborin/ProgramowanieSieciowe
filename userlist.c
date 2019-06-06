@@ -152,10 +152,7 @@ int delete_user(userList_t * list, listElem_t * elem){
         else
             elem->prev->next = NULL;
     }
-    
-    free(elem->m_user->fildesc);
-    free(elem->m_user);
-    free(elem);
+
     return --list->counter;
 }
 

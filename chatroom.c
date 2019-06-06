@@ -203,18 +203,30 @@ int chList_join_chatroom(chatList_t * list, chatListElem_t * elem, user_t * usr)
     if((!list) || (!elem) || (!usr))
         return -1;
     
+    int n_users;
+
     pthread_mutex_lock(&elem->m_chatroom->chat_userlist->list_mutex);
 
-    if (store_element(elem->m_chatroom->chat_userlist, usr) < 0){
+    /*check if user already is in chatroom*/
+    if(find_user_by_name(elem->m_chatroom->chat_userlist,usr->user_name)){
+        pthread_mutex_unlock(&elem->m_chatroom->chat_userlist->list_mutex);
         return -1;
     }
+
+    if (store_element(elem->m_chatroom->chat_userlist, usr) < 0){
+        pthread_mutex_unlock(&elem->m_chatroom->chat_userlist->list_mutex);
+        return -1;
+    }
+
+    /*get number of users in user list*/
+    n_users = elem->m_chatroom->chat_userlist->counter;
 
     pthread_mutex_unlock(&elem->m_chatroom->chat_userlist->list_mutex);
 
     /*set as new user's chatroom*/
     usr->chatroom_name = elem->m_chatroom->chatname;
 
-    return ++elem->m_chatroom->chat_userlist->counter;
+    return n_users;
     
 }
 
@@ -222,13 +234,31 @@ int chList_leave_chatroom(chatList_t * list, chatListElem_t * elem, listElem_t *
     if((!list) || (!elem) || (!usr_elem))
         return -1;
     
-    pthread_mutex_lock(&elem->m_chatroom->chat_userlist->list_mutex);
+    int n_users;
 
+    pthread_mutex_lock(&elem->m_chatroom->chat_userlist->list_mutex);
+    
     if (delete_user(elem->m_chatroom->chat_userlist, usr_elem) < 0){
+        pthread_mutex_unlock(&elem->m_chatroom->chat_userlist->list_mutex);
         return -1;
     }
 
+    /*remove from user*/
+    usr_elem->m_user->chatroom_name = NULL;
+
+    /*get number of users in user list*/
+    n_users = elem->m_chatroom->chat_userlist->counter;
+
     pthread_mutex_unlock(&elem->m_chatroom->chat_userlist->list_mutex);
+    free(usr_elem);
     
-    return --elem->m_chatroom->chat_userlist->counter;
+    if(n_users < 1){
+        pthread_mutex_lock(list->list_mutex);
+        if(chList_delete_chatroom(list,elem) < 0){
+            printf("Failed to remove an empty chatroom\n\r");
+        }
+        pthread_mutex_unlock(list->list_mutex);
+    }
+
+    return n_users;
 }

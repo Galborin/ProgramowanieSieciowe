@@ -57,8 +57,9 @@ Return -1 if error.
 */
 int display_user_list(userList_t * list);
 
-/*Delete element from list.
-Return number of elements in list.
+/*
+Remove element from list,
+then return number of elements in list.
 Return -1 if error.
 */
 int delete_user(userList_t * list, listElem_t * elem);

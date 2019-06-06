@@ -91,6 +91,7 @@ int chList_join_chatroom(chatList_t * list, chatListElem_t * elem, user_t * usr)
 
 /*
 Remove user from chatroom's user list.
+If that was last user, remove chatroom.
 Return number of users in chatroom if success.
 Return -1 if fail.
 */

@@ -29,6 +29,7 @@ void closefd(user_t * usr);
 int GlobalChatList_send_list(user_t * usr);
 int GlobalChatList_create_and_join_chatroom(user_t * usr, void * name);
 int GlobalChatList_join_chatroom(user_t * usr, void * chatroomname);
+int GlobalChatList_leave_chatroom(user_t * user);
 
 /*main----------------------------------------------------------*/
 int main(){
@@ -155,6 +156,15 @@ int main(){
         printf("store_command() fail\n\r");
     }
 
+    /*leave chatroom*/
+    command leavechatroom_command = {
+        command_name: "!leave",
+        func: (int(*)(user_t *, void *))GlobalChatList_leave_chatroom
+    };
+    if(store_command(&leavechatroom_command) < 0){
+        printf("store_command() fail\n\r");
+    }
+
     /*close filedesc*/
     command closeconnection_command = {
         command_name: "!quit",
@@ -277,6 +287,31 @@ int GlobalChatList_join_chatroom(user_t * usr, void * chatroomname){
     }
 
     return -1;
+}
+
+/*
+Leave chatroom.
+*/
+int GlobalChatList_leave_chatroom(user_t * user){
+    listElem_t * user_elem;
+    chatListElem_t * roomtoleave;
+
+    /*find chatroom to leave*/
+    pthread_mutex_lock(GlobalChatList.list_mutex);
+    roomtoleave = chList_find_chatroom_by_name(&GlobalChatList, user->chatroom_name);
+    pthread_mutex_unlock(GlobalChatList.list_mutex);
+    if(!roomtoleave)    
+        return -1;
+
+    /*find user element in chatroom's user list*/
+    pthread_mutex_lock(&roomtoleave->m_chatroom->chat_userlist->list_mutex);
+    user_elem = find_user_by_name(roomtoleave->m_chatroom->chat_userlist, user->user_name);
+    pthread_mutex_unlock(&roomtoleave->m_chatroom->chat_userlist->list_mutex);
+
+    if(!user_elem)
+        return -1;
+    
+    return chList_leave_chatroom(&GlobalChatList,roomtoleave,user_elem);
 }
 
 /*

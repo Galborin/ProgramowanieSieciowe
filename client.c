@@ -12,6 +12,7 @@ piotr
 /*imported------------------------------------------------------*/
 extern userList_t GlobalUserList;
 extern chatList_t GlobalChatList;
+extern int GlobalChatList_leave_chatroom(user_t * user);
 
 /*private functions prototypes----------------------------------*/
 static int log_in(userList_t * list, user_t * usr);
@@ -52,6 +53,13 @@ void * client(user_t * connected_usr){
                     if((user_chatroom = chList_find_chatroom_by_name(&GlobalChatList, connected_usr->chatroom_name))){
                         send_to_all(user_chatroom->m_chatroom->chat_userlist, buffer);
                     }
+                    else{ /*chatroom was removed or user left chatroom*/
+                        connected_usr->chatroom_name = NULL;
+                        user_chatroom = NULL;
+                        if(send(*connected_usr->fildesc,"DISCONNECTED FROM CHAT\n\r",25,0) < 0){
+                            printf("send() fail, %s \n", strerror(errno));
+                        }
+                    }
                 }
                 else if(send(*connected_usr->fildesc,"NOT CONNECTED TO ANY CHAT\n\r",28,0) < 0){
                     printf("send() fail, %s \n", strerror(errno));
@@ -64,17 +72,24 @@ void * client(user_t * connected_usr){
         printf("recv() fail here, %s \n", strerror(errno));
     }
     
+    /*remove user from chatroom*/
+    if(GlobalChatList_leave_chatroom(connected_usr) < 0){
+        printf("Failed to remove from chatroom, probably wasn't in any\n\r"); /*if he wasn't in any chatroom*/
+    }
 
     /*delete user_t*/
     pthread_mutex_lock(&GlobalUserList.list_mutex);
     listElem_t * delet_user = find_user_by_name(&GlobalUserList, connected_usr->user_name);
     if(!delet_user){
-        printf("couldn't delete user_t - not found\n");
+        printf("couldn't delete user - not found\n");
     }
-    if(delete_user(&GlobalUserList, delet_user)<0){  
-        printf("couldn't delete user_t - delete_user() fail\n");
+    if(delete_user(&GlobalUserList, delet_user) < 0){  
+        printf("couldn't delete user - delete_user() fail\n");
     }
     pthread_mutex_unlock(&GlobalUserList.list_mutex);
+    free(connected_usr->fildesc);
+    free(connected_usr);
+    free(delet_user);
     printf("User deleted\n");
     if(display_user_list(&GlobalUserList) < 0){  
         printf("display_user_list() fail()\n");
