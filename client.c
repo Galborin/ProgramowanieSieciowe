@@ -7,16 +7,19 @@ piotr
 #include "app.h"
 #include "userlist.h"
 #include "command_interface.h"
+#include "chatroom.h"
 
 /*imported------------------------------------------------------*/
-extern userList_t * UserList;
+extern userList_t GlobalUserList;
+extern chatList_t GlobalChatList;
+extern int GlobalChatList_leave_chatroom(user_t * user);
 
 /*private functions prototypes----------------------------------*/
-static int log_in(userList_t * list, user * usr);
+static int log_in(userList_t * list, user_t * usr);
 
 /*public functions prototypes-----------------------------------*/
-void * client(user * connected_usr);
-static int command_proc(int * filedesc, const char * input);
+void * client(user_t * connected_usr);
+static int command_proc(user_t * usr, char * input);
 
 /*function definitions------------------------------------------*/
 
@@ -24,26 +27,44 @@ static int command_proc(int * filedesc, const char * input);
 function to handle clients.
 Calls log_in() first.
 Then handle client requests.
-Delete user if connection lost.
+Delete user_t if connection lost.
 */
-void * client(user * connected_usr){    
+void * client(user_t * connected_usr){    
     int nreceived;
     char buffer[BUFFER_SIZE];
-    static int test = 0;
     /*log in */
-    if(log_in(UserList, connected_usr) < 0){ 
+    if(log_in(&GlobalUserList, connected_usr) < 0){ 
         printf("log_in() fail\n\r");
         return NULL;
     } 
-    display_user_list(UserList);
+    display_user_list(&GlobalUserList);
     int namelen = strlen(connected_usr->user_name);
     strcpy(buffer, connected_usr->user_name);
     buffer[namelen] = ':';
+    chatListElem_t * user_chatroom = NULL;
     do{
         while((nreceived = recv(*connected_usr->fildesc,buffer + namelen + 1,BUFFER_SIZE,0)) > 0){
             printf("%s\n",buffer);
-            if((command_proc(connected_usr->fildesc,buffer + namelen + 1)) < 0)
-                send_to_all(UserList, buffer);
+            if((command_proc(connected_usr,buffer + namelen + 1)) > 0)
+                printf("Command called successfully\n\r");
+            else{
+                /*check if chatroom is available*/
+                if(connected_usr->chatroom_name){
+                    if((user_chatroom = chList_find_chatroom_by_name(&GlobalChatList, connected_usr->chatroom_name))){
+                        send_to_all(user_chatroom->m_chatroom->chat_userlist, buffer);
+                    }
+                    else{ /*chatroom was removed or user left chatroom*/
+                        connected_usr->chatroom_name = NULL;
+                        user_chatroom = NULL;
+                        if(send(*connected_usr->fildesc,"DISCONNECTED FROM CHAT\n\r",25,0) < 0){
+                            printf("send() fail, %s \n", strerror(errno));
+                        }
+                    }
+                }
+                else if(send(*connected_usr->fildesc,"NOT CONNECTED TO ANY CHAT\n\r",28,0) < 0){
+                    printf("send() fail, %s \n", strerror(errno));
+                }
+            }  
         }
     }while((nreceived<0) && ((errno == EINTR) || (errno == EAGAIN) || (errno == EWOULDBLOCK)));
 
@@ -51,19 +72,26 @@ void * client(user * connected_usr){
         printf("recv() fail here, %s \n", strerror(errno));
     }
     
-    sleep(1);
-    /*delete user*/
-    pthread_mutex_lock(UserList->list_mutex);
-    listElem_t * delet_user = find_user_by_name(UserList, connected_usr->user_name);
+    /*remove user from chatroom*/
+    if(GlobalChatList_leave_chatroom(connected_usr) < 0){
+        printf("Failed to remove from chatroom, probably wasn't in any\n\r"); /*if he wasn't in any chatroom*/
+    }
+
+    /*delete user_t*/
+    pthread_mutex_lock(&GlobalUserList.list_mutex);
+    listElem_t * delet_user = find_user_by_name(&GlobalUserList, connected_usr->user_name);
     if(!delet_user){
         printf("couldn't delete user - not found\n");
     }
-    if(delete_user(UserList, delet_user)<0){  
+    if(delete_user(&GlobalUserList, delet_user) < 0){  
         printf("couldn't delete user - delete_user() fail\n");
     }
-    pthread_mutex_unlock(UserList->list_mutex);
+    pthread_mutex_unlock(&GlobalUserList.list_mutex);
+    free(connected_usr->fildesc);
+    free(connected_usr);
+    free(delet_user);
     printf("User deleted\n");
-    if(display_user_list(UserList) < 0){  
+    if(display_user_list(&GlobalUserList) < 0){  
         printf("display_user_list() fail()\n");
     }
     printf("CLOSED\n");
@@ -71,11 +99,11 @@ void * client(user * connected_usr){
 }
 
 /*
-send request to client for a name. Add that user to a list.
+send request to client for a name. Add that user_t to a list.
 Return number of elements in list (number of available users).
 Return -1 if error.
 */
-int log_in(userList_t * list, user * usr){
+int log_in(userList_t * list, user_t * usr){
     char namebuff[BUFFER_SIZE];
     if((!usr) || (!namebuff) || (!list))
         return -1;
@@ -100,26 +128,30 @@ int log_in(userList_t * list, user * usr){
             printf("recv() fail, %s \n", strerror(errno));
             return -1;
         }
+        
+        pthread_mutex_lock(&GlobalUserList.list_mutex);
+        result = find_user_by_name(list,namebuff);
+        pthread_mutex_unlock(&GlobalUserList.list_mutex);
 
-    }while(result = find_user_by_name(UserList,namebuff)); /*check if name is not taken by someone*/
+    }while(result); /*check if name is not taken by someone*/
     
     strcpy(usr->user_name,namebuff);
-    pthread_mutex_lock(list->list_mutex);
+    pthread_mutex_lock(&list->list_mutex);
     if(store_element(list, usr) < 0){
         printf("store_element() fail\n");
     };
-    pthread_mutex_unlock(list->list_mutex);
+    pthread_mutex_unlock(&list->list_mutex);
     return list->counter;
 }
 
 /*
 check command list if there is a command with given name.
 If so, call its function.
-Return 0 if success.
+Return integer (output from found command) if success.
 If there is no such command, return -1.
 */
-static int command_proc(int * filedesc, const char * input){
-    if(!filedesc || !input)
+static int command_proc(user_t * usr, char * input){
+    if(!usr || !input)
         return -1;
     
     char * space = strchr(input,' ');/*find space in input*/
@@ -133,7 +165,16 @@ static int command_proc(int * filedesc, const char * input){
         return -1; /*there is no such command*/
     }
     else{
-        found->func(filedesc,space+1);
-        return 0;
+        int result;
+        //if(space)
+        //    printf("called command %s by user %s with args %s\n\r",input,usr->user_name,space + 1);
+        //else
+        //    printf("called command %s by user %s\n\r",input,usr->user_name);
+        if((space)  &&  (strlen(space + 1) > 0)) 
+            result = found->func(usr,(void *)(space + 1)); //there are args to pass
+        else
+            result = found->func(usr,NULL); //there are no args to pass
+
+        return result;
     }
 }

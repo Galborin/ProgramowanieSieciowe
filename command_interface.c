@@ -4,7 +4,6 @@ piotr
 */
 
 /*includes------------------------------------------------------*/
-#include "userlist.h"
 #include "command_interface.h"
 
 /*function definitions------------------------------------------*/
@@ -51,15 +50,15 @@ int store_command(command * comm){
     }
 }
 
-int send_command_list(int * filedesc){
+int send_command_list(user_t * usr){
     size_t length = (command_counter*MAX_CMD_LENGTH) + 21;
     char buffer[length];
     bzero(buffer,length);
-    if(!filedesc)
+    if(!usr)
         return -1;
     if(!head_cmd){
         char * msg = "No commands\n\r";
-        if(send(*filedesc,msg,strlen(msg),0)<0){
+        if(send(*usr->fildesc,msg,strlen(msg),0)<0){
             printf("send() fail, %s \n", strerror(errno));
             return -1;
         }
@@ -73,7 +72,7 @@ int send_command_list(int * filedesc){
         tmp = tmp->next;
     }
     
-    if(send(*filedesc,buffer,length,0)<0){
+    if(send(*usr->fildesc,buffer,length,0)<0){
             printf("send() fail, %s \n", strerror(errno));
             return -1;
     }

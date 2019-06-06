@@ -3,6 +3,11 @@ piotr
 22.05.2019
 */
 
+/**TODO
+ * alarm() when waiting for reply from server (timeout)
+ * assert when there is no argument (argc < 2) 
+ * /
+
 /*includes------------------------------------------------------*/
 #include "app.h"
 

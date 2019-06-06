@@ -3,26 +3,33 @@ piotr
 22.05.2019
 */
 
+
 /*includes------------------------------------------------------*/
 #include "app.h"
 #include "userlist.h"
 #include "command_interface.h"
+#include "chatroom.h"
 
 /*imported------------------------------------------------------*/
-extern void * client(user * connected_usr);
+extern void * client(user_t * connected_usr);
 
 /*exported------------------------------------------------------*/
-userList_t * UserList;
+userList_t GlobalUserList;
+chatList_t GlobalChatList;
 
 /*global--------------------------------------------------------*/
-pthread_mutex_t client_mutex = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t chatlist_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 /*private functions prototypes----------------------------------*/
 static void sig_pipe(int signo);
 
 /*functions prototypes------------------------------------------*/
-int send_UserList(int * filedesc);
-void closefd(int * filedesc);
+int send_GlobalUserList(user_t * usr);
+void closefd(user_t * usr);
+int GlobalChatList_send_list(user_t * usr);
+int GlobalChatList_create_and_join_chatroom(user_t * usr, void * name);
+int GlobalChatList_join_chatroom(user_t * usr, void * chatroomname);
+int GlobalChatList_leave_chatroom(user_t * user);
 
 /*main----------------------------------------------------------*/
 int main(){
@@ -90,45 +97,86 @@ int main(){
         return 1;
     }
 
-    /*initialize UserList*/
-    UserList = (userList_t *)malloc(sizeof(userList_t));
-    if(userList_init(UserList,&client_mutex)<0){
-        printf("UserList initialization fail\n");
+    /*initialize GlobalUserList*/
+    if(userList_init(&GlobalUserList) < 0){
+        printf("GlobalUserList initialization fail\n");
         return 1;
     }
 
-    /*vvvvvvvvvvv here commands are being stored vvvvvvvvvvvv*/
+    /*initialize GlobalChatList*/
+    if(chList_init(&GlobalChatList,&chatlist_mutex) < 0){
+        printf("GlobalUserList initialization fail\n");
+        return 1;
+    }
 
-    /*send list of avilable command*/
-    command listofcommands_task = {
+    /*vvvvvvvvvvv here commands are being stored vvvvvvvvvvvv*//*vvvvvvvvvvv here commands are being stored vvvvvvvvvvvv*/
+
+    /*send list of avilable commands*/
+    command listofcommands_command = {
         command_name: "?",
-        func: (int(*)(int * ,void *))send_command_list 
+        func: (int(*)(user_t * ,void *))send_command_list 
     };
-    if(store_command(&listofcommands_task)<0){
+    if(store_command(&listofcommands_command) < 0){
         printf("store_command() fail\n\r");
     }
     
     /*send user list */
-    command sendusers_task = {
+    command sendusers_command = {
         command_name: "!users",
-        func: (int(*)(int * ,void *))send_UserList 
+        func: (int(*)(user_t * ,void *))send_GlobalUserList 
     };
-    if(store_command(&sendusers_task)<0){
+    if(store_command(&sendusers_command) < 0){
+        printf("store_command() fail\n\r");
+    }
+
+    /*send chatroom list */
+    command sendchatrooms_command = {
+        command_name: "!chats",
+        func: (int(*)(user_t * ,void *))GlobalChatList_send_list 
+    };
+    if(store_command(&sendchatrooms_command) < 0){
         printf("store_command() fail\n\r");
     }
     
-    /*close filedesc*/
-    command closeconnection_task = {
-        command_name: "!quit",
-        func: (int(*)(int * ,void *))closefd 
+    /*create and join chatroom*/
+    command createchatroom_command = {
+        command_name: "!create",
+        func: (int(*)(user_t * ,void *))GlobalChatList_create_and_join_chatroom
     };
-    if(store_command(&closeconnection_task)<0){
+    if(store_command(&createchatroom_command) < 0){
+        printf("store_command() fail\n\r");
+    }
+
+    /*join chatroom*/
+    command joinchatroom_command = {
+        command_name: "!join",
+        func: (int(*)(user_t * ,void *))GlobalChatList_join_chatroom
+    };
+    if(store_command(&joinchatroom_command) < 0){
+        printf("store_command() fail\n\r");
+    }
+
+    /*leave chatroom*/
+    command leavechatroom_command = {
+        command_name: "!leave",
+        func: (int(*)(user_t *, void *))GlobalChatList_leave_chatroom
+    };
+    if(store_command(&leavechatroom_command) < 0){
+        printf("store_command() fail\n\r");
+    }
+
+    /*close filedesc*/
+    command closeconnection_command = {
+        command_name: "!quit",
+        func: (int(*)(user_t * ,void *))closefd 
+    };
+    if(store_command(&closeconnection_command) < 0){
         printf("store_command() fail\n\r");
     }
 
     display_command_list();
 
-    /*^^^^^^^^^^ here commands are being stored ^^^^^^^^^^^^*/
+    /*^^^^^^^^^^ here commands are being stored ^^^^^^^^^^^^*//*^^^^^^^^^^ here commands are being stored ^^^^^^^^^^^^*/
 
     signal(SIGPIPE, sig_pipe);
 
@@ -147,9 +195,10 @@ int main(){
             inet_ntop(AF_INET,(const struct sockaddr *)&cliaddress.sin_addr,address,sizeof(address));
             printf("\nConnection from: %s\n",address);
 
-            user * conn_user = calloc(1, sizeof(user)); /*allocate memory for new user */
+            user_t * conn_user = calloc(1, sizeof(user_t)); /*allocate memory for new user_t */
             conn_user->user_address = cliaddress;
             conn_user->fildesc = connectfd;
+            conn_user->chatroom_name = NULL;
         
             pthread_t thread; /*new thread*/
 
@@ -185,17 +234,89 @@ static void sig_pipe(int signo){
 }
 
 /*
-send users from UserList function.
+Send users from GlobalUserList.
 Same as send_user_list() (from userlist.h) 
-but do not require userList_t argument
+but does not require userList_t argument
 */
-int send_UserList(int * filedesc){
-    return send_user_list(UserList, filedesc);
+int send_GlobalUserList(user_t * usr){
+    if(usr)
+        return send_user_list(&GlobalUserList, usr);
+    
+    return -1;
+}
+
+/*
+Send chatrooms from GlobalChatList.
+Same as chList_send_list() (from chatroom.h) 
+but does not require chatList_t argument
+*/
+int GlobalChatList_send_list(user_t * usr){
+    if(usr)
+        return chList_send_list(&GlobalChatList, usr);
+    
+    return -1;
+}
+
+/*
+Function based on chRoom_create_and_join() (from chatroom.h),
+but always takes GlobalChatList as argument. 
+*/
+int GlobalChatList_create_and_join_chatroom(user_t * usr, void * name){
+
+    if((usr) && (name)){
+        return chRoom_create_and_join(usr,&GlobalChatList,(char *)name);
+    }
+
+    return -1;
+}
+
+/*
+Find and join chatroom from GlobalChatList with given name.
+*/
+int GlobalChatList_join_chatroom(user_t * usr, void * chatroomname){
+
+    if((usr) && (chatroomname)){
+        chatListElem_t * roomtojoin;
+        int result;
+        pthread_mutex_lock(GlobalChatList.list_mutex);
+        if((roomtojoin = chList_find_chatroom_by_name(&GlobalChatList, (char *)chatroomname))){
+            result = chList_join_chatroom(&GlobalChatList, roomtojoin, usr);
+        }
+        pthread_mutex_unlock(GlobalChatList.list_mutex);
+        return result;
+    }
+
+    return -1;
+}
+
+/*
+Leave chatroom.
+*/
+int GlobalChatList_leave_chatroom(user_t * user){
+    listElem_t * user_elem;
+    chatListElem_t * roomtoleave;
+
+    /*find chatroom to leave*/
+    pthread_mutex_lock(GlobalChatList.list_mutex);
+    roomtoleave = chList_find_chatroom_by_name(&GlobalChatList, user->chatroom_name);
+    pthread_mutex_unlock(GlobalChatList.list_mutex);
+    if(!roomtoleave)    
+        return -1;
+
+    /*find user element in chatroom's user list*/
+    pthread_mutex_lock(&roomtoleave->m_chatroom->chat_userlist->list_mutex);
+    user_elem = find_user_by_name(roomtoleave->m_chatroom->chat_userlist, user->user_name);
+    pthread_mutex_unlock(&roomtoleave->m_chatroom->chat_userlist->list_mutex);
+
+    if(!user_elem)
+        return -1;
+    
+    return chList_leave_chatroom(&GlobalChatList,roomtoleave,user_elem);
 }
 
 /*
 close connection
 */
-void closefd(int * filedesc){
-    close(*filedesc);
+void closefd(user_t * usr){
+    close(*usr->fildesc);
 }

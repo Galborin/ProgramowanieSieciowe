@@ -26,7 +26,16 @@ piotr
 #define LISTENQ 10
 #define USER_NAME_LENGTH 20
 #define MAX_CMD_LENGTH 20
+#define CHAT_NAME_LENGTH 20
 
+
+/*user_t typedef*/
+typedef struct user_t {
+    char user_name[USER_NAME_LENGTH + 1];
+    struct sockaddr_in user_address;
+    int * fildesc;
+    char * chatroom_name;
+}user_t;
 
 
 #endif

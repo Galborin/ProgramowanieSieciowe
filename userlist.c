@@ -7,17 +7,18 @@
 
 /*function definitions------------------------------------------*/
 
-int userList_init(userList_t * list, pthread_mutex_t * mutex){
-    if((!list) || (!mutex))
+int userList_init(userList_t * list){
+    if((!list))
         return -1;
-    
+
     list->head = NULL;
-    list->list_mutex = mutex;
-    int counter = 0;
+    pthread_mutex_t tmp = PTHREAD_MUTEX_INITIALIZER;
+    list->list_mutex = tmp;
+    list->counter = 0;
     return 0;
 }
 
-int store_element(userList_t * list, user * usr){
+int store_element(userList_t * list, user_t * usr){
     if((!usr) || (!list))
         return -1;
     
@@ -55,11 +56,11 @@ listElem_t * find_user_by_name(userList_t * list, const char * username){
     return tmp;
 }
 
-int send_user_list(userList_t * list, int * filedesc){
-    if((!list) || (!filedesc))
+int send_user_list(userList_t * list, user_t * usr){
+    if((!list) || (!usr))
         return -1;
     
-    pthread_mutex_lock(list->list_mutex);
+    pthread_mutex_lock(&list->list_mutex);
     if(list->head){
         char address[INET_ADDRSTRLEN+1];
         size_t length = (USER_NAME_LENGTH+INET_ADDRSTRLEN+21)*list->counter+1;
@@ -76,16 +77,17 @@ int send_user_list(userList_t * list, int * filedesc){
 
             tmp = tmp->next;
         }
-        pthread_mutex_unlock(list->list_mutex);
-        if(send(*filedesc,all_address_name,length,0)<0){
+        pthread_mutex_unlock(&list->list_mutex);
+        if(send(*usr->fildesc,all_address_name,length,0)<0){
             printf("send() fail, %s \n", strerror(errno));
             return -1;
         }
         return list->counter;        
     }
     else{
+        pthread_mutex_unlock(&list->list_mutex);
         char * msg = "List is empty\n";
-         if(send(*filedesc,msg,strlen(msg)+1,0)<0){
+         if(send(*usr->fildesc,msg,strlen(msg)+1,0)<0){
             printf("send() fail, %s \n", strerror(errno));
             return -1;
         }
@@ -97,7 +99,7 @@ int display_user_list(userList_t * list){
     if(!list)
         return -1;
 
-    pthread_mutex_lock(list->list_mutex);
+    pthread_mutex_lock(&list->list_mutex);
     if(list->head){
         char address[INET_ADDRSTRLEN+1];
         size_t length = (USER_NAME_LENGTH+INET_ADDRSTRLEN+21)*list->counter+1;
@@ -115,11 +117,12 @@ int display_user_list(userList_t * list){
 
             tmp = tmp->next;
         }
-        pthread_mutex_unlock(list->list_mutex);
+        pthread_mutex_unlock(&list->list_mutex);
         printf("\n%s\n",all_address_name);
         return list->counter;        
     }
     else{
+        pthread_mutex_unlock(&list->list_mutex);
         printf("List is empty\n");
         return 0;
     }
@@ -149,10 +152,7 @@ int delete_user(userList_t * list, listElem_t * elem){
         else
             elem->prev->next = NULL;
     }
-    
-    free(elem->m_user->fildesc);
-    free(elem->m_user);
-    free(elem);
+
     return --list->counter;
 }
 
@@ -160,7 +160,7 @@ int send_to_all(userList_t * list, char * message){
     if((!list) || (!message))
         return -1;
     
-    pthread_mutex_lock(list->list_mutex);
+    pthread_mutex_lock(&list->list_mutex);
     if(list->head){
         listElem_t * tmp = list->head;
         
@@ -170,11 +170,12 @@ int send_to_all(userList_t * list, char * message){
             }
             tmp = tmp->next;
         }
-        pthread_mutex_unlock(list->list_mutex);
+        pthread_mutex_unlock(&list->list_mutex);
         
         return list->counter;        
     }
     else{
+        pthread_mutex_unlock(&list->list_mutex);
         return -1;
     }
 }
