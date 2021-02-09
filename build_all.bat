@@ -1,2 +1,2 @@
-g++ -o server .\src\main.cpp .\src\simple_chat_server.cpp -lws2_32 -I.\src\
-g++ -o client .\client\client.cpp -lws2_32
+g++ -o server .\src\*.cpp -lws2_32 -losapi -I.\src\ -I.\include\ -L.
+g++ -o app_client .\client\*.cpp -lws2_32

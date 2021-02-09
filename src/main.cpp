@@ -6,8 +6,8 @@
 
 int __cdecl main(void) 
 {
-    SimpleChatServer scs(DEFAULT_PORT);
-    scs.start_listening();
+    scs::SimpleChatServer chat(DEFAULT_PORT);
+    chat.start_listening();
 
     return 0;
 }

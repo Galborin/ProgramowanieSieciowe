@@ -1,5 +1,11 @@
 #include "simple_chat_server.h"
 
+#include <limits.h>
+
+#define DEFAULT_MUTEX_LOCK_TIMEOUT 1000
+
+namespace scs 
+{
 SimpleChatServer::SimpleChatServer(const char *aPort) {
     
     WSADATA wsaData;
@@ -55,24 +61,41 @@ SimpleChatServer::~SimpleChatServer() {
 
 void SimpleChatServer::start_listening() {
     int ret;
+    int num = 0;
+
+    ret = listen(mListenSocket, SOMAXCONN);
+    if (ret == SOCKET_ERROR) {
+        printf("listen failed with error: %d\n", WSAGetLastError());
+        closesocket(mListenSocket);
+        return;
+    }
     
     while(true) {
-        ret = listen(mListenSocket, SOMAXCONN);
-        if (ret == SOCKET_ERROR) {
-            printf("listen failed with error: %d\n", WSAGetLastError());
-            closesocket(mListenSocket);
-            break;
+        
+        if (Client::mNumberOfClients >= MAX_CLIENTS) {
+            continue;
         }
+
+        std::shared_ptr<Client> cl = std::make_shared<Client>();
 
         // Accept a client socket
-        mClientSocket = accept(mListenSocket, NULL, NULL);
-        if (mClientSocket == INVALID_SOCKET) {
+        cl->mSocket = accept(mListenSocket, NULL, NULL);
+        if (cl->mSocket == INVALID_SOCKET) {
             printf("accept failed with error: %d\n", WSAGetLastError());
-            closesocket(mListenSocket);
             break;
         }
+        
+        // if (mClientsMutex.lock(DEFAULT_MUTEX_LOCK_TIMEOUT)) {
+        mClients.push_back(cl);
+        printf("Added new client\n");
+        //     mClientsMutex.unlock();
+        // } else { continue; }
 
-        handle_client();
+        // create thread for client.
+        num = (num < INT_MAX) ? num++ : 0;
+        std::string name = "client_thread" + std::to_string(num);
+        ClientThread thr = ClientThread(name.c_str(), this, cl);
+        thr.run();
 
         Sleep(1);
     }
@@ -81,44 +104,72 @@ void SimpleChatServer::start_listening() {
     closesocket(mListenSocket);
 }
 
-void SimpleChatServer::handle_client() {
+int SimpleChatServer::send_to_all(const std::string &aMessage) const {
+    int bytes_sent;
+    int ret = 0;
+    for (auto i = 0; i < mClients.size(); ++i) {
+        bytes_sent = 0;
+        if (auto pCl = mClients[i].lock()) {
+            while (bytes_sent < aMessage.length()) {
+                bytes_sent += send(pCl->mSocket, aMessage.c_str(), aMessage.length(), 0);
+                if (bytes_sent == SOCKET_ERROR) {
+                    printf("send failed with error: %d\n", WSAGetLastError());
+                    ret--;
+                    break;
+                }
+            }
+            ret++;
+        }
+    } 
+    return ret;
+}
+
+void ClientThread::body() {
+    printf("Hello from thread body");
     int ret;
-    int recvbuflen = sizeof(mRecvbuf);
     int bytes_received = 0;
     int bytes_sent = 0;
+    std::string message;
     // Receive until the peer shuts down the connection
     do {
-
-        bytes_received = recv(mClientSocket, mRecvbuf, recvbuflen, 0);
+        bytes_received = recv(mClient->mSocket, mClient->mBuffer.get(), CLIENT_BUFLEN, 0);
         if (bytes_received > 0) {
             printf("Bytes received: %d\n", bytes_received);
+            printf("Message: %s\n", mClient->mBuffer.get());
+            message = mClient->mBuffer.get();
 
-        // Echo the buffer back to the sender
-            bytes_sent = send(mClientSocket, mRecvbuf, bytes_received, 0);
-            if (bytes_sent == SOCKET_ERROR) {
-                printf("send failed with error: %d\n", WSAGetLastError());
-                closesocket(mClientSocket);
-                break;
-            }
-            printf("Bytes sent: %d\n", bytes_sent);
+            // // Echo the buffer back to the sender
+            // bytes_sent = send(mClient->mSocket, message.c_str(), bytes_received, 0);
+            // if (bytes_sent == SOCKET_ERROR) {
+            //     printf("send failed with error: %d\n", WSAGetLastError());
+            //     closesocket(mClient->mSocket);
+            //     return;
+            // }
+            // printf("Bytes sent: %d\n", bytes_sent);
+
+            mServer->send_to_all(message);
+
         }
         else if (bytes_received == 0) {
             printf("Connection closing...\n");
         } else {
             printf("recv failed with error: %d\n", WSAGetLastError());
-            closesocket(mClientSocket);
-            break;
+            closesocket(mClient->mSocket);
+            return;
         }
     } while (bytes_received > 0);
 
+    printf("Thread body ends");
+
     // shutdown the connection since we're done
-    ret = shutdown(mClientSocket, SD_SEND);
+    ret = shutdown(mClient->mSocket, SD_SEND);
     if (ret == SOCKET_ERROR) {
         printf("shutdown failed with error: %d\n", WSAGetLastError());
-        closesocket(mClientSocket);
+        closesocket(mClient->mSocket);
         return;
     }
 
     // cleanup
-    closesocket(mClientSocket);
+    closesocket(mClient->mSocket);
 }
+} // namespace
