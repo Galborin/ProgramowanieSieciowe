@@ -56,15 +56,24 @@ SimpleChatServer::SimpleChatServer(const char *aPort) {
 }
 
 SimpleChatServer::~SimpleChatServer() {
+    mClients.clear();
+    mThreads.clear();
     WSACleanup();
 }
 
-void SimpleChatServer::remove_thread(osapi::Thread *pThr) {
-    for (int i = 0; i < mThreads.size(); ++i) {
-        if (mThreads[i].get() == pThr) {
-            mThreads.erase(mThreads.begin() + i);
+bool SimpleChatServer::remove_thread(osapi::Thread *pThr) {
+    if (mThreadMutex.lock(DEFAULT_MUTEX_LOCK_TIMEOUT)) {
+    
+        for (int i = 0; i < mThreads.size(); ++i) {
+            if (mThreads[i].get() == pThr) {
+                mThreads.erase(mThreads.begin() + i);
+                mThreadMutex.unlock();
+                return true;
+            }
         }
-    }
+        mThreadMutex.unlock();
+    } 
+    return false;
 }
 
 void SimpleChatServer::start_listening() {
@@ -93,17 +102,20 @@ void SimpleChatServer::start_listening() {
             break;
         }
         
-        // if (mClientsMutex.lock(DEFAULT_MUTEX_LOCK_TIMEOUT)) {
-        mClients.push_back(cl);
-        printf("Added new client\n");
-            // mClientsMutex.unlock();
-        // } else { continue; }
+        if (mClientsMutex.lock(DEFAULT_MUTEX_LOCK_TIMEOUT)) {
+            mClients.push_back(cl);
+            printf("Added new client\n");
+            mClientsMutex.unlock();
+        } else { continue; }
 
         // create thread for client.
         num = (num < INT_MAX) ? num++ : 0;
         std::string name = "client_thread" + std::to_string(num);
-        mThreads.push_back(std::make_unique<ClientThread>(name.c_str(), this, cl));
-        mThreads.back()->run();
+        if (mThreadMutex.lock(DEFAULT_MUTEX_LOCK_TIMEOUT)) {   
+            mThreads.push_back(std::make_unique<ClientThread>(name.c_str(), this, cl));
+            mThreads.back()->run();
+            mThreadMutex.unlock();
+        }
 
         Sleep(1);
     }
@@ -112,23 +124,28 @@ void SimpleChatServer::start_listening() {
     closesocket(mListenSocket);
 }
 
-int SimpleChatServer::send_to_all(const std::string &aMessage) const {
+int SimpleChatServer::send_to_all(const std::string &aMessage) {
     int bytes_sent;
     int ret = 0;
-    for (auto i = 0; i < mClients.size(); ++i) {
-        bytes_sent = 0;
-        if (auto pCl = mClients[i].lock()) {
-            while (bytes_sent < aMessage.length()) {
-                bytes_sent += send(pCl->mSocket, aMessage.c_str(), aMessage.length(), 0);
-                if (bytes_sent == SOCKET_ERROR) {
-                    printf("send failed with error: %d\n", WSAGetLastError());
-                    ret--;
-                    break;
+    if (mClientsMutex.lock(DEFAULT_MUTEX_LOCK_TIMEOUT)) {
+
+        for (auto i = 0; i < mClients.size(); ++i) {
+            bytes_sent = 0;
+            if (auto pCl = mClients[i].lock()) {
+                while (bytes_sent < aMessage.length()) {
+                    bytes_sent += send(pCl->mSocket, aMessage.c_str(), aMessage.length(), 0);
+                    if (bytes_sent == SOCKET_ERROR) {
+                        mClientsMutex.unlock();
+                        printf("send failed with error: %d\n", WSAGetLastError());
+                        ret--;
+                        break;
+                    }
                 }
+                ret++;
             }
-            ret++;
         }
-    } 
+        mClientsMutex.unlock();
+    }
     return ret;
 }
 
@@ -137,7 +154,7 @@ void ClientThread::begin() {
 }
 
 void ClientThread::loop() {
-    std::shared_ptr<Client> cl = mClient.lock();
+    std::shared_ptr<Client> cl = mClient;
     if (!cl) {
         kill();
         return;
@@ -154,15 +171,6 @@ void ClientThread::loop() {
             printf("Bytes received: %d\n", bytes_received);
             printf("Message: %s\n", cl->mBuffer.get());
             message = cl->mBuffer.get();
-
-            // // Echo the buffer back to the sender
-            // bytes_sent = send(cl->mSocket, message.c_str(), bytes_received, 0);
-            // if (bytes_sent == SOCKET_ERROR) {
-            //     printf("send failed with error: %d\n", WSAGetLastError());
-            //     closesocket(cl->mSocket);
-            //     return;
-            // }
-            // printf("Bytes sent: %d\n", bytes_sent);
 
             mServer->send_to_all(message);
 

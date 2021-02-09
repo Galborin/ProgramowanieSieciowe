@@ -27,14 +27,22 @@ private:
 
 private:
   SOCKET mListenSocket;
+  /**
+   * Holds weak pointers to clients.
+   * No need to explicitly remove - will be removed when thread is destroyed.
+   */
   std::vector<std::weak_ptr<Client>> mClients = {};
   std::vector<std::unique_ptr<osapi::Thread>> mThreads = {};
+  osapi::Mutex mThreadMutex;
   osapi::Mutex mClientsMutex;
 
 public:
   SimpleChatServer(const char *aPort);
   virtual ~SimpleChatServer(void);
-  void remove_thread(osapi::Thread *pThr);
+  /**
+   * Blocking call. Return true if success, otherwise false.
+   */
+  bool remove_thread(osapi::Thread *pThr);
   void start_listening(void);
 
   /**
@@ -42,12 +50,12 @@ public:
    * It is increased each time the full message was sent.
    * It is decreased each time the send operation failed and was aborted.
    */
-  int send_to_all(const std::string &aMessage) const;
+  int send_to_all(const std::string &aMessage);
 };
 
 class ClientThread : public osapi::MortalThread {
   SimpleChatServer *mServer;
-  std::weak_ptr<Client> mClient;
+  std::shared_ptr<Client> mClient;
 
   void begin() override;
   void loop() override;
