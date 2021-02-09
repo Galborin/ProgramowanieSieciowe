@@ -59,6 +59,14 @@ SimpleChatServer::~SimpleChatServer() {
     WSACleanup();
 }
 
+void SimpleChatServer::remove_thread(osapi::Thread *pThr) {
+    for (int i = 0; i < mThreads.size(); ++i) {
+        if (mThreads[i].get() == pThr) {
+            mThreads.erase(mThreads.begin() + i);
+        }
+    }
+}
+
 void SimpleChatServer::start_listening() {
     int ret;
     int num = 0;
@@ -88,14 +96,14 @@ void SimpleChatServer::start_listening() {
         // if (mClientsMutex.lock(DEFAULT_MUTEX_LOCK_TIMEOUT)) {
         mClients.push_back(cl);
         printf("Added new client\n");
-        //     mClientsMutex.unlock();
+            // mClientsMutex.unlock();
         // } else { continue; }
 
         // create thread for client.
         num = (num < INT_MAX) ? num++ : 0;
         std::string name = "client_thread" + std::to_string(num);
-        ClientThread thr = ClientThread(name.c_str(), this, cl);
-        thr.run();
+        mThreads.push_back(std::make_unique<ClientThread>(name.c_str(), this, cl));
+        mThreads.back()->run();
 
         Sleep(1);
     }
@@ -124,25 +132,34 @@ int SimpleChatServer::send_to_all(const std::string &aMessage) const {
     return ret;
 }
 
-void ClientThread::body() {
-    printf("Hello from thread body");
+void ClientThread::begin() {
+    printf("Hello from thread\n");
+}
+
+void ClientThread::loop() {
+    std::shared_ptr<Client> cl = mClient.lock();
+    if (!cl) {
+        kill();
+        return;
+    }
+
     int ret;
     int bytes_received = 0;
     int bytes_sent = 0;
     std::string message;
     // Receive until the peer shuts down the connection
     do {
-        bytes_received = recv(mClient->mSocket, mClient->mBuffer.get(), CLIENT_BUFLEN, 0);
+        bytes_received = recv(cl->mSocket, cl->mBuffer.get(), CLIENT_BUFLEN, 0);
         if (bytes_received > 0) {
             printf("Bytes received: %d\n", bytes_received);
-            printf("Message: %s\n", mClient->mBuffer.get());
-            message = mClient->mBuffer.get();
+            printf("Message: %s\n", cl->mBuffer.get());
+            message = cl->mBuffer.get();
 
             // // Echo the buffer back to the sender
-            // bytes_sent = send(mClient->mSocket, message.c_str(), bytes_received, 0);
+            // bytes_sent = send(cl->mSocket, message.c_str(), bytes_received, 0);
             // if (bytes_sent == SOCKET_ERROR) {
             //     printf("send failed with error: %d\n", WSAGetLastError());
-            //     closesocket(mClient->mSocket);
+            //     closesocket(cl->mSocket);
             //     return;
             // }
             // printf("Bytes sent: %d\n", bytes_sent);
@@ -154,22 +171,27 @@ void ClientThread::body() {
             printf("Connection closing...\n");
         } else {
             printf("recv failed with error: %d\n", WSAGetLastError());
-            closesocket(mClient->mSocket);
+            closesocket(cl->mSocket);
+            kill();
             return;
         }
     } while (bytes_received > 0);
 
-    printf("Thread body ends");
-
     // shutdown the connection since we're done
-    ret = shutdown(mClient->mSocket, SD_SEND);
+    ret = shutdown(cl->mSocket, SD_SEND);
     if (ret == SOCKET_ERROR) {
         printf("shutdown failed with error: %d\n", WSAGetLastError());
-        closesocket(mClient->mSocket);
-        return;
     }
 
     // cleanup
-    closesocket(mClient->mSocket);
+    closesocket(cl->mSocket);
+    kill();
+}
+
+void ClientThread::end() {
+    printf("End thread\n");
+
+    // nothing more to be done in the thread.
+    mServer->remove_thread(this);
 }
 } // namespace

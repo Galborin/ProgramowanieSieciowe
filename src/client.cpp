@@ -10,7 +10,7 @@ Client::Client() {
 int Client::mNumberOfClients = 0;
 
 Client::~Client() {
+  printf("Client::Destructor\n");
   mNumberOfClients--;
 }
-
 } // namespace

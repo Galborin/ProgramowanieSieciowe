@@ -28,11 +28,13 @@ private:
 private:
   SOCKET mListenSocket;
   std::vector<std::weak_ptr<Client>> mClients = {};
+  std::vector<std::unique_ptr<osapi::Thread>> mThreads = {};
   osapi::Mutex mClientsMutex;
 
 public:
   SimpleChatServer(const char *aPort);
   virtual ~SimpleChatServer(void);
+  void remove_thread(osapi::Thread *pThr);
   void start_listening(void);
 
   /**
@@ -43,15 +45,17 @@ public:
   int send_to_all(const std::string &aMessage) const;
 };
 
-class ClientThread : public osapi::Thread {
-  const SimpleChatServer *mServer;
-  const std::shared_ptr<Client> mClient;
+class ClientThread : public osapi::MortalThread {
+  SimpleChatServer *mServer;
+  std::weak_ptr<Client> mClient;
 
-  void body() override;
+  void begin() override;
+  void loop() override;
+  void end() override;
 
 public:
-  ClientThread(const char *aName, const SimpleChatServer *aS, const std::shared_ptr<Client> aC) 
-    : osapi::Thread(1, 0, osapi::Joinable::NOT_JOINABLE, aName), mServer(aS), mClient(aC) {};
+  ClientThread(const char *aName, SimpleChatServer *aS, std::shared_ptr<Client> aC) 
+    : osapi::MortalThread(1, 0, aName), mServer(aS), mClient(aC) {};
 
 };
 } //namepsace
