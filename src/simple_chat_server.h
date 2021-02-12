@@ -24,6 +24,10 @@ namespace scs
 class SimpleChatServer {
 
 private:
+  /**
+   * Increased each time new client connects.
+   */
+  int mClientNumber = 0;
 
 private:
   SOCKET mListenSocket;

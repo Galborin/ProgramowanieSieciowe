@@ -78,7 +78,6 @@ bool SimpleChatServer::remove_thread(osapi::Thread *pThr) {
 
 void SimpleChatServer::start_listening() {
     int ret;
-    int num = 0;
 
     ret = listen(mListenSocket, SOMAXCONN);
     if (ret == SOCKET_ERROR) {
@@ -109,13 +108,16 @@ void SimpleChatServer::start_listening() {
         } else { continue; }
 
         // create thread for client.
-        num = (num < INT_MAX) ? num++ : 0;
-        std::string name = "client_thread" + std::to_string(num);
+        std::string name = std::to_string(mClientNumber);
+        printf("Create user with name %d\n", mClientNumber);
         if (mThreadMutex.lock(DEFAULT_MUTEX_LOCK_TIMEOUT)) {   
             mThreads.push_back(std::make_unique<ClientThread>(name.c_str(), this, cl));
             mThreads.back()->run();
             mThreadMutex.unlock();
         }
+        
+        if (mClientNumber < INT_MAX) { mClientNumber++; }
+        else {mClientNumber = 0;}
 
         Sleep(1);
     }
@@ -164,15 +166,16 @@ void ClientThread::loop() {
     int bytes_received = 0;
     int bytes_sent = 0;
     std::string message;
+    std::string prefix = getName(); 
+    prefix = "[" + prefix + "]";
     // Receive until the peer shuts down the connection
     do {
         bytes_received = recv(cl->mSocket, cl->mBuffer.get(), CLIENT_BUFLEN, 0);
         if (bytes_received > 0) {
             printf("Bytes received: %d\n", bytes_received);
-            printf("Message: %s\n", cl->mBuffer.get());
-            message = cl->mBuffer.get();
-
-            mServer->send_to_all(message);
+            message = std::string(cl->mBuffer.get(), bytes_received);
+            printf("Message: %s\n", message.c_str());
+            mServer->send_to_all(prefix + message);
 
         }
         else if (bytes_received == 0) {

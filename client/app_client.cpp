@@ -36,7 +36,7 @@ void RecvThread::body() {
         // Receive until the peer closes the connection
         bytes_received = recv(mSock, mBuf, DEFAULT_BUFLEN, 0);
         if (bytes_received > 0) {
-            printf("Message: %s\n", mBuf);
+            printf("%s\n", mBuf);
         }
         else {
             printf("recv failed with error\n");
@@ -75,11 +75,12 @@ int __cdecl main(int argc, char **argv)
     int recvbuflen = DEFAULT_BUFLEN;
     
     // Validate the parameters
-    if (argc != 2) {
-        printf("usage: %s server-name\n", argv[0]);
+    if (argc != 3) {
+        printf("usage: %s server-name user-name\n", argv[0]);
         return 1;
     }
-
+    std::string username = argv[2];
+    printf("your name: %s\n", username.c_str());
     // Initialize Winsock
     iResult = WSAStartup(MAKEWORD(2,2), &wsaData);
     if (iResult != 0) {
@@ -142,16 +143,15 @@ int __cdecl main(int argc, char **argv)
             printf("get_input() fail\n");
             break;
         }
+        input = username + ": " + input;
 
-        bytes_sent = send( ConnectSocket, sendbuf, input.length(), 0 );
+        bytes_sent = send( ConnectSocket, input.c_str(), input.length(), 0 );
         if (bytes_sent == SOCKET_ERROR) {
             printf("send failed with error: %d\n", WSAGetLastError());
             closesocket(ConnectSocket);
             WSACleanup();
             return 1;
         }
-
-        printf("Bytes Sent: %ld\n", bytes_sent);
     }
 
     // shutdown the connection since no more data will be sent
